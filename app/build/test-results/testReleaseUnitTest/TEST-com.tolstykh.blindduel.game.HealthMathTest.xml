@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.tolstykh.blindduel.game.HealthMathTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-07-20T02:51:50.398Z" hostname="Mac" time="0.0">
-  <properties/>
-  <testcase name="applyDamage subtracts and clamps to the valid range" classname="com.tolstykh.blindduel.game.HealthMathTest" time="0.0"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
