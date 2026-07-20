@@ -6,6 +6,7 @@ import com.tolstykh.blindduel.ui.duel.DuelViewModel_HiltModules;
 import com.tolstykh.blindduel.ui.join.JoinViewModel_HiltModules;
 import com.tolstykh.blindduel.ui.mainmenu.MainMenuViewModel_HiltModules;
 import com.tolstykh.blindduel.ui.result.ResultViewModel_HiltModules;
+import com.tolstykh.blindduel.ui.settings.SettingsViewModel_HiltModules;
 import dagger.Binds;
 import dagger.Component;
 import dagger.Module;
@@ -166,7 +167,8 @@ public final class BlindDuelApp_HiltComponents {
           HiltWrapper_ActivitySavedStateHandleModule.class,
           JoinViewModel_HiltModules.KeyModule.class,
           MainMenuViewModel_HiltModules.KeyModule.class,
-          ResultViewModel_HiltModules.KeyModule.class
+          ResultViewModel_HiltModules.KeyModule.class,
+          SettingsViewModel_HiltModules.KeyModule.class
       }
   )
   @ActivityRetainedScoped
@@ -208,7 +210,8 @@ public final class BlindDuelApp_HiltComponents {
           HiltWrapper_HiltViewModelFactory_ViewModelModule.class,
           JoinViewModel_HiltModules.BindsModule.class,
           MainMenuViewModel_HiltModules.BindsModule.class,
-          ResultViewModel_HiltModules.BindsModule.class
+          ResultViewModel_HiltModules.BindsModule.class,
+          SettingsViewModel_HiltModules.BindsModule.class
       }
   )
   @ViewModelScoped

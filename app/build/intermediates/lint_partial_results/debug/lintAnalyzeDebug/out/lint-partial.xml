@@ -5,12 +5,12 @@
                     <map id="android.settings.APPLICATION_DETAILS_SETTINGS (used to start an activity)">
                         <location id="0"
                             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/tolstykh/blindduel/ui/mainmenu/MainMenuScreen.kt"
-                            line="129"
+                            line="146"
                             column="9"
-                            startOffset="4630"
-                            endLine="129"
-                            endColumn="106"
-                            endOffset="4727"/>
+                            startOffset="5412"
+                            endLine="146"
+                            endColumn="112"
+                            endOffset="5515"/>
                     </map>
             </map>
     </map>

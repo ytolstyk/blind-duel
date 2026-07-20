@@ -13,6 +13,7 @@ import com.tolstykh.blindduel.ui.duel.DuelScreen
 import com.tolstykh.blindduel.ui.join.JoinScreen
 import com.tolstykh.blindduel.ui.mainmenu.MainMenuScreen
 import com.tolstykh.blindduel.ui.result.ResultScreen
+import com.tolstykh.blindduel.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
 
 @Serializable private object MainMenu
@@ -21,6 +22,7 @@ import kotlinx.serialization.Serializable
 @Serializable private object Calibration
 @Serializable private object Duel
 @Serializable private object Result
+@Serializable private object Settings
 
 @Composable
 fun Navigation(
@@ -39,7 +41,11 @@ fun Navigation(
                 onNavigateToSoloTest = {
                     navController.navigate(Calibration) { popUpTo<MainMenu>() }
                 },
+                onNavigateToSettings = { navController.navigate(Settings) },
             )
+        }
+        composable<Settings> {
+            SettingsScreen(onBackPressed = { navController.popBackStack() })
         }
         composable<Create> {
             CreateScreen(

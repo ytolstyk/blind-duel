@@ -68,6 +68,9 @@ composeBom = "2024.09.00"
 /Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/gradle/libs.versions.toml:14: Warning: A newer version of androidx.navigation:navigation-compose than 2.9.6 is available: 2.9.8 [GradleDependency]
 androidxNavigation = "2.9.6"
                      ~~~~~~~
+/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/gradle/libs.versions.toml:22: Warning: A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1 [GradleDependency]
+androidxDatastore = "1.1.7"
+                    ~~~~~~~
 
    Explanation for issues of type "GradleDependency":
    This detector looks for usages of libraries where the version you are using
@@ -163,4 +166,4 @@ kotlinxCoroutinesTest = "1.9.0"
    Identifier: androidx.compose.runtime
    Feedback: https://issuetracker.google.com/issues/new?component=612128
 
-0 errors, 24 warnings, 2 hints
+0 errors, 25 warnings, 2 hints

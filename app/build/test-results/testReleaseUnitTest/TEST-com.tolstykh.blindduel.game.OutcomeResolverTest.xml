@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.tolstykh.blindduel.game.OutcomeResolverTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-07-20T02:33:12.141Z" hostname="Mac" time="0.001">
+  <properties/>
+  <testcase name="simultaneous double elimination is a draw regardless of timing" classname="com.tolstykh.blindduel.game.OutcomeResolverTest" time="0.0"/>
+  <testcase name="win is immediate once opponent health is reported zero" classname="com.tolstykh.blindduel.game.OutcomeResolverTest" time="0.001"/>
+  <testcase name="own zero health waits within the draw window instead of declaring loss immediately" classname="com.tolstykh.blindduel.game.OutcomeResolverTest" time="0.0"/>
+  <testcase name="ongoing while both alive" classname="com.tolstykh.blindduel.game.OutcomeResolverTest" time="0.0"/>
+  <testcase name="loss once the draw window elapses with no opposing zero" classname="com.tolstykh.blindduel.game.OutcomeResolverTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

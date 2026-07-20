@@ -10,3 +10,5 @@
 -keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.mainmenu.MainMenuViewModel
 -keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.result.ResultViewModel
 -keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.result.ResultViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.settings.SettingsViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.settings.SettingsViewModel

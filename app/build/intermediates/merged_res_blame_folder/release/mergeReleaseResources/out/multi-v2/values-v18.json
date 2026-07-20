@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.tolstykh.blindduel.app-mergeReleaseResources-60:/values-v18/values-v18.xml",
+            "outputFile": "com.tolstykh.blindduel.app-mergeReleaseResources-64:/values-v18/values-v18.xml",
             "map": [
                 {
-                    "source": "/Users/yuriytolstykh/.gradle/caches/8.13/transforms/55b2d070b7b1dcdb01e624a9300bd95c/transformed/appcompat-1.6.1/res/values-v18/values-v18.xml",
+                    "source": "/Users/yuriytolstykh/.gradle/caches/8.13/transforms/447815b07e0792f21b7e9309fce07121/transformed/appcompat-1.6.1/res/values-v18/values-v18.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

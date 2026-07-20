@@ -47,3 +47,13 @@ fun GameConnection.sessionEndedEvents(): Flow<Unit> = merge(
         .filter { it is GameMessage.Quit }
         .map { },
 )
+
+/**
+ * The standard "I'm leaving" sequence used by every screen's quit/leave action — notify the
+ * peer, then tear down. Sequenced in one suspend function so [disconnect] can never race ahead
+ * of the outgoing [GameMessage.Quit] send.
+ */
+suspend fun GameConnection.quit() {
+    sendMessage(GameMessage.Quit)
+    disconnect()
+}

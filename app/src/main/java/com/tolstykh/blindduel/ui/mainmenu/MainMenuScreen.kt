@@ -2,15 +2,20 @@ package com.tolstykh.blindduel.ui.mainmenu
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
+import android.provider.Settings as SystemSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,6 +40,7 @@ fun MainMenuScreen(
     onNavigateToCreate: () -> Unit,
     onNavigateToJoin: () -> Unit,
     onNavigateToSoloTest: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     viewModel: MainMenuViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -72,60 +78,71 @@ fun MainMenuScreen(
         permissionLauncher.launch(GamePermissions.required(includeCamera).toTypedArray())
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(text = "BlindDuel", style = MaterialTheme.typography.headlineMedium)
-
-        OutlinedTextField(
-            value = viewModel.playerName,
-            onValueChange = viewModel::onPlayerNameChanged,
-            label = { Text("Your name") },
-            singleLine = true,
+    Box(modifier = Modifier.fillMaxSize()) {
+        IconButton(
+            onClick = onNavigateToSettings,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp, bottom = 16.dp),
-        )
-
-        Button(
-            onClick = { requestAndProceed(PendingAction.Create) },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Create Duel") }
-
-        Button(
-            onClick = { requestAndProceed(PendingAction.Join) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-        ) { Text("Join Duel") }
-
-        if (permissionDenied) {
-            Text(
-                text = "BlindDuel needs Bluetooth/Nearby permissions (and camera, to join) to connect.",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            TextButton(onClick = { context.openAppSettings() }) { Text("Open Settings") }
+                .align(Alignment.TopEnd)
+                .padding(8.dp),
+        ) {
+            Icon(Icons.Filled.Settings, contentDescription = "Settings")
         }
 
-        if (BuildConfig.DEBUG) {
-            TextButton(
-                onClick = {
-                    viewModel.startSoloTest()
-                    onNavigateToSoloTest()
-                },
-                modifier = Modifier.padding(top = 24.dp),
-            ) { Text("Solo Test (Debug)") }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(text = "BlindDuel", style = MaterialTheme.typography.headlineMedium)
+
+            OutlinedTextField(
+                value = viewModel.playerName,
+                onValueChange = viewModel::onPlayerNameChanged,
+                label = { Text("Your name") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp, bottom = 16.dp),
+            )
+
+            Button(
+                onClick = { requestAndProceed(PendingAction.Create) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Create Duel") }
+
+            Button(
+                onClick = { requestAndProceed(PendingAction.Join) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+            ) { Text("Join Duel") }
+
+            if (permissionDenied) {
+                Text(
+                    text = "BlindDuel needs Bluetooth/Nearby permissions (and camera, to join) to connect.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                TextButton(onClick = { context.openAppSettings() }) { Text("Open Settings") }
+            }
+
+            if (BuildConfig.DEBUG) {
+                TextButton(
+                    onClick = {
+                        viewModel.startSoloTest()
+                        onNavigateToSoloTest()
+                    },
+                    modifier = Modifier.padding(top = 24.dp),
+                ) { Text("Solo Test (Debug)") }
+            }
         }
     }
 }
 
 private fun android.content.Context.openAppSettings() {
     startActivity(
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
+        Intent(SystemSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
     )
 }

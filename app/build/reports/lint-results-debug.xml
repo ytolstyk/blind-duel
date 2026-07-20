@@ -210,6 +210,22 @@
     </issue>
 
     <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="androidxDatastore = &quot;1.1.7&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/gradle/libs.versions.toml"
+            line="22"
+            column="21"/>
+    </issue>
+
+    <issue
         id="LockedOrientationActivity"
         severity="Warning"
         message="Expecting `android:screenOrientation=&quot;unspecified&quot;` or `&quot;fullSensor&quot;` for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices"

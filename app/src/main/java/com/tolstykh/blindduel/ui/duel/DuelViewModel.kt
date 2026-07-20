@@ -8,12 +8,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.connection.GameMessage
+import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
 import com.tolstykh.blindduel.game.BearingModel
 import com.tolstykh.blindduel.game.Cooldown
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.GameSession
+import com.tolstykh.blindduel.game.HealthMath
 import com.tolstykh.blindduel.game.HitTest
 import com.tolstykh.blindduel.game.OutcomeResolver
 import com.tolstykh.blindduel.game.Vector2
@@ -71,6 +73,8 @@ class DuelViewModel @Inject constructor(
 
     var sessionEnded by mutableStateOf(false)
         private set
+
+    val isPracticeMode: Boolean = gameSession.isPracticeMode
 
     private val connection get() = activeGameConnection.current
     private val cooldown = Cooldown(GameConstants.FIRE_COOLDOWN_MS)
@@ -170,7 +174,7 @@ class DuelViewModel @Inject constructor(
         if (!fireEvent.hit) return
         // Damage is always the fixed local constant, never a peer-supplied value — a
         // modified client reporting an inflated FireEvent can't heal or over-damage either side.
-        val newHealth = (uiState.myHealth - GameConstants.HIT_DAMAGE).coerceIn(0, GameConstants.MAX_PLAYER_HEALTH)
+        val newHealth = HealthMath.applyDamage(uiState.myHealth, GameConstants.HIT_DAMAGE, GameConstants.MAX_PLAYER_HEALTH)
         if (newHealth == 0 && myHealthZeroAtMs == null) {
             myHealthZeroAtMs = System.currentTimeMillis()
         }
@@ -248,6 +252,12 @@ class DuelViewModel @Inject constructor(
         if (outgoingShot?.firedAtMs == firedAtMs) {
             outgoingShot = null
         }
+    }
+
+    /** [quit] disconnects, which flips [sessionEnded] via the [sessionEndedEvents] collector
+     * in [init] — DuelScreen already treats that the same as any other lost connection. */
+    fun onLeavePracticeClicked() {
+        viewModelScope.launch { connection.quit() }
     }
 
     private companion object {

@@ -1,6 +1,7 @@
 package com.tolstykh.blindduel.connection
 
 import com.tolstykh.blindduel.game.GameConstants
+import com.tolstykh.blindduel.game.HealthMath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,6 +37,7 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     private var opponentHeadingDegrees = 180f
     private var opponentStepXMeters = 0f
     private var opponentStepYMeters = 0f
+    private var opponentHealth = GameConstants.MAX_PLAYER_HEALTH
 
     /** Only one ambient-motion loop may run at a time — each rematch/reconnect must cancel
      * the previous one, otherwise every new session stacks another infinite coroutine. */
@@ -46,9 +48,10 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     override suspend fun startJoining(sessionCode: String, localPlayerName: String) = simulateConnect()
 
     private fun simulateConnect() {
+        resetOpponentHealth()
         _connectionState.value = ConnectionState.Connecting
         scope.launch {
-            delay(400)
+            delay(CONNECT_SIMULATION_DELAY_MS)
             _connectionState.value = ConnectionState.Connected("loopback-opponent")
             _incomingMessages.tryEmit(GameMessage.Hello("Practice Dummy"))
             _incomingMessages.tryEmit(GameMessage.ReadyForDuel)
@@ -57,19 +60,32 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
 
     override suspend fun sendMessage(message: GameMessage) {
         when (message) {
-            is GameMessage.CalibrationComplete -> scope.launch {
-                delay(200)
-                _incomingMessages.tryEmit(GameMessage.CalibrationComplete(baselineHeadingDegrees = 180f))
-                startAmbientOpponentMotion()
+            is GameMessage.CalibrationComplete -> {
+                // Fires exactly once per duel, including rematches — the only reliable
+                // "a new duel is starting" signal available on this connection, so it also
+                // doubles as the reset point for the dummy's simulated health.
+                resetOpponentHealth()
+                scope.launch {
+                    delay(CALIBRATION_ECHO_DELAY_MS)
+                    _incomingMessages.tryEmit(GameMessage.CalibrationComplete(baselineHeadingDegrees = 180f))
+                    startAmbientOpponentMotion()
+                }
             }
-            is GameMessage.FireEvent -> maybeFireBack()
+            is GameMessage.FireEvent -> {
+                if (message.hit) applyHitToOpponent()
+                maybeFireBack()
+            }
             is GameMessage.RematchRequest -> scope.launch {
-                delay(300)
+                delay(REMATCH_ECHO_DELAY_MS)
                 _incomingMessages.tryEmit(GameMessage.RematchRequest)
             }
             is GameMessage.Quit -> disconnect()
             else -> Unit
         }
+    }
+
+    private fun resetOpponentHealth() {
+        opponentHealth = GameConstants.MAX_PLAYER_HEALTH
     }
 
     private fun startAmbientOpponentMotion() {
@@ -89,6 +105,17 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
         }
     }
 
+    // The real transport applies this on the receiving peer's own device; here the peer is
+    // simulated, so we apply it directly and echo back the resulting health like a real
+    // opponent's own HealthUpdate broadcast would.
+    private fun applyHitToOpponent() {
+        opponentHealth = HealthMath.applyDamage(opponentHealth, GameConstants.HIT_DAMAGE, GameConstants.MAX_PLAYER_HEALTH)
+        scope.launch {
+            delay(SIMULATED_HEALTH_UPDATE_DELAY_MS)
+            _incomingMessages.tryEmit(GameMessage.HealthUpdate(opponentHealth))
+        }
+    }
+
     private fun maybeFireBack() {
         if (Random.nextFloat() < 0.35f) {
             scope.launch {
@@ -102,5 +129,12 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
         ambientMotionJob?.cancel()
         ambientMotionJob = null
         _connectionState.value = ConnectionState.Disconnected
+    }
+
+    private companion object {
+        const val CONNECT_SIMULATION_DELAY_MS = 400L
+        const val CALIBRATION_ECHO_DELAY_MS = 200L
+        const val REMATCH_ECHO_DELAY_MS = 300L
+        const val SIMULATED_HEALTH_UPDATE_DELAY_MS = 100L
     }
 }

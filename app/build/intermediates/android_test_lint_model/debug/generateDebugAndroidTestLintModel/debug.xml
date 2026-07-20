@@ -25,6 +25,6 @@
       type="INSTRUMENTATION_TEST"
       applicationId="com.tolstykh.blindduel.debug.test"
       generatedResourceFolders="build/generated/res/resValues/androidTest/debug"
-      desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/5bd08064333a39ebd8cfa5ecb70511d9/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/3e94555340ca6ca644fde1ccf6fae135/transformed/D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

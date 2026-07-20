@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -142,6 +144,15 @@ fun DuelScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         )
+
+        if (viewModel.isPracticeMode) {
+            TextButton(
+                onClick = viewModel::onLeavePracticeClicked,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp),
+            ) { Text("Leave Practice") }
+        }
 
         if (uiState.showAccuracyWarning) {
             DismissibleHintChip(

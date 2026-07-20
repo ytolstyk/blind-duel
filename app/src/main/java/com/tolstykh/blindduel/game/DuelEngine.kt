@@ -97,6 +97,14 @@ object HitTest {
     ): Boolean = AngleMath.angularDistance(aimAngleDegrees, bearingToOpponentOnScreenDegrees) <= toleranceDegrees
 }
 
+/** Applies a fixed amount of damage to a health value, clamped to a valid range — shared by
+ * every path that turns a landed hit into a new health total (the local player taking a real
+ * hit, and the practice-mode simulated opponent taking one). */
+object HealthMath {
+    fun applyDamage(currentHealth: Int, damage: Int, maxHealth: Int): Int =
+        (currentHealth - damage).coerceIn(0, maxHealth)
+}
+
 /** Fire-cooldown state machine, driven by explicit timestamps so it's trivially testable. */
 class Cooldown(private val durationMs: Long) {
     fun remainingMs(firedAtMs: Long, nowMs: Long): Long =

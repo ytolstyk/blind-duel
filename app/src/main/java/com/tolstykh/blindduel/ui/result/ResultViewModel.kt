@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.connection.GameMessage
+import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameSession
@@ -60,8 +61,7 @@ class ResultViewModel @Inject constructor(
     }
 
     fun onQuitClicked() {
-        viewModelScope.launch { connection.sendMessage(GameMessage.Quit) }
-        connection.disconnect()
+        viewModelScope.launch { connection.quit() }
     }
 
     private fun checkRematchReady() {

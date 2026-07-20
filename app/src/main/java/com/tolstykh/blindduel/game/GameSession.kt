@@ -28,6 +28,9 @@ class GameSession @Inject constructor() {
     var isAlignedAtCalibration: Boolean = true
         private set
 
+    var isPracticeMode: Boolean = false
+        private set
+
     var finalOutcome: DuelOutcome = DuelOutcome.Ongoing
         private set
     var finalMyHealth: Int = GameConstants.MAX_PLAYER_HEALTH
@@ -41,6 +44,10 @@ class GameSession @Inject constructor() {
 
     fun recordOpponentName(name: String) {
         opponentName = name
+    }
+
+    fun recordPracticeMode(practice: Boolean) {
+        isPracticeMode = practice
     }
 
     fun recordCalibration(myBaseline: Float, opponentBaseline: Float, aligned: Boolean) {

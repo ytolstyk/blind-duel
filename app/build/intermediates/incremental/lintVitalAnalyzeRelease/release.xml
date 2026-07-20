@@ -7,7 +7,7 @@
     mergedManifest="build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"
     proguardFiles="build/intermediates/default_proguard_files/global/proguard-android-optimize.txt-8.13.2:proguard-rules.pro"
     partialResultsDir="build/intermediates/lint_vital_partial_results/release/lintVitalAnalyzeRelease/out"
-    desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/5bd08064333a39ebd8cfa5ecb70511d9/transformed/D8BackportedDesugaredMethods.txt">
+    desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/3e94555340ca6ca644fde1ccf6fae135/transformed/D8BackportedDesugaredMethods.txt">
   <buildFeatures
       namespacing="REQUIRED"/>
   <sourceProviders>
@@ -27,6 +27,6 @@
       applicationId="com.tolstykh.blindduel"
       generatedSourceFolders="build/generated/ksp/release/java:build/generated/ksp/release/kotlin:build/generated/ap_generated_sources/release/out:build/generated/source/buildConfig/release"
       generatedResourceFolders="build/generated/res/resValues/release"
-      desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/5bd08064333a39ebd8cfa5ecb70511d9/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/Users/yuriytolstykh/.gradle/caches/8.13/transforms/3e94555340ca6ca644fde1ccf6fae135/transformed/D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

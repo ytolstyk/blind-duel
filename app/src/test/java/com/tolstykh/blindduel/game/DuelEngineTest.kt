@@ -124,6 +124,16 @@ class HitTestTest {
     }
 }
 
+class HealthMathTest {
+    @Test
+    fun `applyDamage subtracts and clamps to the valid range`() {
+        assertEquals(2, HealthMath.applyDamage(currentHealth = 3, damage = 1, maxHealth = 3))
+        assertEquals(0, HealthMath.applyDamage(currentHealth = 1, damage = 1, maxHealth = 3))
+        assertEquals(0, HealthMath.applyDamage(currentHealth = 0, damage = 1, maxHealth = 3)) // never goes negative
+        assertEquals(3, HealthMath.applyDamage(currentHealth = 3, damage = 0, maxHealth = 3)) // never exceeds max
+    }
+}
+
 class CooldownTest {
     private val cooldown = Cooldown(durationMs = 2000L)
 

@@ -1,26 +1,45 @@
 package com.tolstykh.blindduel.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-// BlindDuel is always played at night in spirit — a single dark scheme keeps the
-// ambient dust/star effects and duel visuals consistent across every screen.
-private val DuelColorScheme = darkColorScheme(
+private val DuelDarkColorScheme = darkColorScheme(
     primary = DuelAccentViolet,
     secondary = DuelAccentEmber,
     tertiary = DuelParticle,
-    background = DuelBackground,
-    surface = DuelSurface,
-    onBackground = DuelOnBackground,
-    onSurface = DuelOnBackground,
+    background = DuelBackgroundDark,
+    surface = DuelSurfaceDark,
+    onBackground = DuelOnBackgroundDark,
+    onSurface = DuelOnBackgroundDark,
+)
+
+private val DuelLightColorScheme = lightColorScheme(
+    primary = DuelAccentViolet,
+    secondary = DuelAccentEmber,
+    tertiary = DuelParticle,
+    background = DuelBackgroundLight,
+    surface = DuelSurfaceLight,
+    onBackground = DuelOnBackgroundLight,
+    onSurface = DuelOnBackgroundLight,
 )
 
 @Composable
-fun BlindDuelTheme(content: @Composable () -> Unit) {
+fun BlindDuelTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    val colorScheme = if (darkTheme) DuelDarkColorScheme else DuelLightColorScheme
     MaterialTheme(
-        colorScheme = DuelColorScheme,
+        colorScheme = colorScheme,
         typography = Typography,
-        content = content,
+        content = {
+            // MaterialTheme alone doesn't set LocalContentColor — without this Surface, every
+            // Text() using its default color falls back to a hardcoded black, which is
+            // unreadable against the dark scheme's near-black background.
+            Surface(color = colorScheme.background, contentColor = colorScheme.onBackground) {
+                content()
+            }
+        },
     )
 }

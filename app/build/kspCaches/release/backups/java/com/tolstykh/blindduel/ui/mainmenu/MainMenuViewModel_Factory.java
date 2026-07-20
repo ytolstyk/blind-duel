@@ -1,6 +1,7 @@
 package com.tolstykh.blindduel.ui.mainmenu;
 
 import com.tolstykh.blindduel.connection.ActiveGameConnection;
+import com.tolstykh.blindduel.data.AppPreferencesRepository;
 import com.tolstykh.blindduel.game.GameSession;
 import dagger.internal.DaggerGenerated;
 import dagger.internal.Factory;
@@ -30,24 +31,29 @@ public final class MainMenuViewModel_Factory implements Factory<MainMenuViewMode
 
   private final Provider<ActiveGameConnection> activeGameConnectionProvider;
 
+  private final Provider<AppPreferencesRepository> appPrefsProvider;
+
   private MainMenuViewModel_Factory(Provider<GameSession> gameSessionProvider,
-      Provider<ActiveGameConnection> activeGameConnectionProvider) {
+      Provider<ActiveGameConnection> activeGameConnectionProvider,
+      Provider<AppPreferencesRepository> appPrefsProvider) {
     this.gameSessionProvider = gameSessionProvider;
     this.activeGameConnectionProvider = activeGameConnectionProvider;
+    this.appPrefsProvider = appPrefsProvider;
   }
 
   @Override
   public MainMenuViewModel get() {
-    return newInstance(gameSessionProvider.get(), activeGameConnectionProvider.get());
+    return newInstance(gameSessionProvider.get(), activeGameConnectionProvider.get(), appPrefsProvider.get());
   }
 
   public static MainMenuViewModel_Factory create(Provider<GameSession> gameSessionProvider,
-      Provider<ActiveGameConnection> activeGameConnectionProvider) {
-    return new MainMenuViewModel_Factory(gameSessionProvider, activeGameConnectionProvider);
+      Provider<ActiveGameConnection> activeGameConnectionProvider,
+      Provider<AppPreferencesRepository> appPrefsProvider) {
+    return new MainMenuViewModel_Factory(gameSessionProvider, activeGameConnectionProvider, appPrefsProvider);
   }
 
   public static MainMenuViewModel newInstance(GameSession gameSession,
-      ActiveGameConnection activeGameConnection) {
-    return new MainMenuViewModel(gameSession, activeGameConnection);
+      ActiveGameConnection activeGameConnection, AppPreferencesRepository appPrefs) {
+    return new MainMenuViewModel(gameSession, activeGameConnection, appPrefs);
   }
 }

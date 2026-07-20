@@ -249,6 +249,26 @@
     </incident>
 
     <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1">
+        <fix-replace
+            description="Change to 1.2.1"
+            family="Update versions"
+            oldString="1.1.7"
+            replacement="1.2.1"
+            priority="0"/>
+        <location
+            file="$HOME/AndroidStudioProjects/BlindDuel/gradle/libs.versions.toml"
+            line="22"
+            column="21"
+            startOffset="503"
+            endLine="22"
+            endColumn="28"
+            endOffset="510"/>
+    </incident>
+
+    <incident
         id="NewerVersionAvailable"
         severity="warning"
         message="A newer version of org.jetbrains.kotlin.android than 2.2.21 is available: 2.4.10">
