@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.tolstykh.blindduel.game.CooldownTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-07-20T02:33:11.802Z" hostname="Mac" time="0.001">
+<testsuite name="com.tolstykh.blindduel.game.CooldownTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-07-20T02:51:49.030Z" hostname="Mac" time="0.001">
   <properties/>
   <testcase name="not ready immediately after firing, ready after duration elapses" classname="com.tolstykh.blindduel.game.CooldownTest" time="0.001"/>
   <testcase name="secondsRemaining rounds up so the UI never shows a false zero" classname="com.tolstykh.blindduel.game.CooldownTest" time="0.0"/>

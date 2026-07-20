@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -135,6 +136,7 @@ fun DuelScreen(
             remainingHealth = uiState.myHealth,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(16.dp),
         )
 
@@ -150,6 +152,7 @@ fun DuelScreen(
                 onClick = viewModel::onLeavePracticeClicked,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .statusBarsPadding()
                     .padding(16.dp),
             ) { Text("Leave Practice") }
         }
@@ -160,6 +163,7 @@ fun DuelScreen(
                 onDismiss = viewModel::onDismissAccuracyWarning,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .padding(top = 16.dp),
             )
         } else if (uiState.showAlignmentWarning) {
@@ -168,6 +172,7 @@ fun DuelScreen(
                 onDismiss = viewModel::onDismissAlignmentWarning,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .padding(top = 16.dp),
             )
         }
