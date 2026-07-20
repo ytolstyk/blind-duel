@@ -1,0 +1,1 @@
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.create.CreateViewModel

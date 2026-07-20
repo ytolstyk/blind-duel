@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-debug-61:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-main-63:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-debug-61:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-main-63:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.tolstykh.blindduel.app-debug-61:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.tolstykh.blindduel.app-main-63:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-debug-61:/drawable_ic_launcher_background.xml.flat",
+        "source": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-main-63:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-debug-61:/drawable_ic_launcher_monochrome.xml.flat",
+        "source": "/Users/yuriytolstykh/.gradle/daemon/8.13/com.tolstykh.blindduel.app-main-63:/drawable/ic_launcher_monochrome.xml"
+    }
+]

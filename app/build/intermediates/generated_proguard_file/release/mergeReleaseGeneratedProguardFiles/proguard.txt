@@ -1,0 +1,12 @@
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.calibration.CalibrationViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.calibration.CalibrationViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.create.CreateViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.create.CreateViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.duel.DuelViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.duel.DuelViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.join.JoinViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.join.JoinViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.mainmenu.MainMenuViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.mainmenu.MainMenuViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.result.ResultViewModel
+-keep,allowobfuscation,allowshrinking class com.tolstykh.blindduel.ui.result.ResultViewModel

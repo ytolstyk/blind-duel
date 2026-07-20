@@ -1,0 +1,329 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.tolstykh.blindduel.debug"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="36" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:5:5-67
+11-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:5:22-64
+12    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+12-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:6:5-76
+12-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:6:22-73
+13    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+13-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:7:5-76
+13-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:7:22-73
+14    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+14-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:8:5-79
+14-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:8:22-76
+15
+16    <!--
+17         Nearby Connections discovery/advertising: pre-S needs BLUETOOTH + fine location,
+18         S+ uses the scoped runtime Bluetooth permissions instead.
+19    -->
+20    <uses-permission
+20-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:12:5-95
+21        android:name="android.permission.BLUETOOTH"
+21-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:12:22-65
+22        android:maxSdkVersion="30" />
+22-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:12:66-92
+23    <uses-permission
+23-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:13:5-101
+24        android:name="android.permission.BLUETOOTH_ADMIN"
+24-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:13:22-71
+25        android:maxSdkVersion="30" />
+25-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:13:72-98
+26    <uses-permission
+26-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:14:5-16:38
+27        android:name="android.permission.ACCESS_FINE_LOCATION"
+27-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:15:9-63
+28        android:maxSdkVersion="30" />
+28-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:16:9-35
+29    <uses-permission
+29-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:17:5-20:31
+30        android:name="android.permission.BLUETOOTH_SCAN"
+30-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:18:9-57
+31        android:usesPermissionFlags="neverForLocation" />
+31-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:19:9-55
+32    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+32-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:21:5-78
+32-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:21:22-75
+33    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+33-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:22:5-76
+33-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:22:22-73
+34    <uses-permission
+34-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:23:5-26:38
+35        android:name="android.permission.NEARBY_WIFI_DEVICES"
+35-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:24:9-62
+36        android:usesPermissionFlags="neverForLocation" />
+36-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:25:9-55
+37    <uses-permission android:name="android.permission.CAMERA" />
+37-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:28:5-65
+37-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:28:22-62
+38
+39    <uses-feature
+39-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:29:5-85
+40        android:name="android.hardware.camera"
+40-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:29:19-57
+41        android:required="false" />
+41-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:29:58-82
+42
+43    <!-- Gates the step-detector sensor used for dead-reckoning; gracefully degraded if denied. -->
+44    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+44-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:32:5-79
+44-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:32:22-76
+45    <uses-permission android:name="android.permission.VIBRATE" />
+45-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:34:5-66
+45-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:34:22-63
+46
+47    <permission
+47-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
+48        android:name="com.tolstykh.blindduel.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+48-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
+49        android:protectionLevel="signature" />
+49-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
+50
+51    <uses-permission android:name="com.tolstykh.blindduel.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+51-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
+51-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
+52
+53    <application
+53-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:36:5-60:19
+54        android:name="com.tolstykh.blindduel.BlindDuelApp"
+54-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:37:9-37
+55        android:allowBackup="true"
+55-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:38:9-35
+56        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+56-->[androidx.core:core:1.17.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/0f5e9d64c1bb066289e679c1cbeccbc9/transformed/core-1.17.0/AndroidManifest.xml:28:18-86
+57        android:debuggable="true"
+58        android:extractNativeLibs="false"
+59        android:icon="@mipmap/ic_launcher"
+59-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:39:9-43
+60        android:label="@string/app_name"
+60-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:40:9-41
+61        android:roundIcon="@mipmap/ic_launcher"
+61-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:41:9-48
+62        android:supportsRtl="true"
+62-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:42:9-35
+63        android:testOnly="true"
+64        android:theme="@style/Theme.BlindDuel" >
+64-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:43:9-47
+65        <meta-data
+65-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:45:9-47:69
+66            android:name="com.google.android.gms.version"
+66-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:46:13-58
+67            android:value="@integer/google_play_services_version" />
+67-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:47:13-66
+68
+69        <activity
+69-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:49:9-59:20
+70            android:name="com.tolstykh.blindduel.MainActivity"
+70-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:50:13-41
+71            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+71-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:51:13-87
+72            android:exported="true"
+72-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:52:13-36
+73            android:screenOrientation="portrait"
+73-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:53:13-49
+74            android:theme="@style/Theme.BlindDuel" >
+74-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:54:13-51
+75            <intent-filter>
+75-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:55:13-58:29
+76                <action android:name="android.intent.action.MAIN" />
+76-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:56:17-69
+76-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:56:25-66
+77
+78                <category android:name="android.intent.category.LAUNCHER" />
+78-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:57:17-77
+78-->/Users/yuriytolstykh/AndroidStudioProjects/BlindDuel/app/src/main/AndroidManifest.xml:57:27-74
+79            </intent-filter>
+80        </activity>
+81
+82        <service
+82-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:24:9-33:19
+83            android:name="androidx.camera.core.impl.MetadataHolderService"
+83-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:25:13-75
+84            android:enabled="false"
+84-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:26:13-36
+85            android:exported="false" >
+85-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:27:13-37
+86            <meta-data
+86-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:30:13-32:89
+87                android:name="androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER"
+87-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:31:17-103
+88                android:value="androidx.camera.camera2.Camera2Config$DefaultProvider" />
+88-->[androidx.camera:camera-camera2:1.6.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/ce01dbd74516867bd47424a526fb8eb8/transformed/camera-camera2-1.6.1/AndroidManifest.xml:32:17-86
+89        </service>
+90        <service
+90-->[com.google.android.gms:play-services-nearby:19.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/613f21f843c1ade930c2f54dc14c81ba/transformed/play-services-nearby-19.3.0/AndroidManifest.xml:9:9-214
+91            android:name="com.google.android.gms.nearby.exposurenotification.WakeUpService"
+91-->[com.google.android.gms:play-services-nearby:19.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/613f21f843c1ade930c2f54dc14c81ba/transformed/play-services-nearby-19.3.0/AndroidManifest.xml:9:18-97
+92            android:exported="true"
+92-->[com.google.android.gms:play-services-nearby:19.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/613f21f843c1ade930c2f54dc14c81ba/transformed/play-services-nearby-19.3.0/AndroidManifest.xml:9:98-121
+93            android:permission="com.google.android.gms.nearby.exposurenotification.EXPOSURE_CALLBACK" />
+93-->[com.google.android.gms:play-services-nearby:19.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/613f21f843c1ade930c2f54dc14c81ba/transformed/play-services-nearby-19.3.0/AndroidManifest.xml:9:122-211
+94        <service
+94-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:9:9-15:19
+95            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+95-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:10:13-91
+96            android:directBootAware="true"
+96-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:17:13-43
+97            android:exported="false" >
+97-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:11:13-37
+98            <meta-data
+98-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:12:13-14:85
+99                android:name="com.google.firebase.components:com.google.mlkit.vision.barcode.internal.BarcodeRegistrar"
+99-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:13:17-120
+100                android:value="com.google.firebase.components.ComponentRegistrar" />
+100-->[com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/561316d0904d3b15b7095be58faf4a94/transformed/play-services-mlkit-barcode-scanning-18.3.1/AndroidManifest.xml:14:17-82
+101            <meta-data
+101-->[com.google.mlkit:vision-common:17.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/d26204f3810c11d25d30024397361e6f/transformed/vision-common-17.3.0/AndroidManifest.xml:12:13-14:85
+102                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+102-->[com.google.mlkit:vision-common:17.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/d26204f3810c11d25d30024397361e6f/transformed/vision-common-17.3.0/AndroidManifest.xml:13:17-124
+103                android:value="com.google.firebase.components.ComponentRegistrar" />
+103-->[com.google.mlkit:vision-common:17.3.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/d26204f3810c11d25d30024397361e6f/transformed/vision-common-17.3.0/AndroidManifest.xml:14:17-82
+104            <meta-data
+104-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:20:13-22:85
+105                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+105-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:21:17-120
+106                android:value="com.google.firebase.components.ComponentRegistrar" />
+106-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:22:17-82
+107        </service>
+108
+109        <provider
+109-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:9:9-13:38
+110            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+110-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:10:13-78
+111            android:authorities="com.tolstykh.blindduel.debug.mlkitinitprovider"
+111-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:11:13-69
+112            android:exported="false"
+112-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:12:13-37
+113            android:initOrder="99" />
+113-->[com.google.mlkit:common:18.11.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/c91fe70c45b8fa8c2c02431ffa2f8a34/transformed/common-18.11.0/AndroidManifest.xml:13:13-35
+114
+115        <activity
+115-->[com.google.android.gms:play-services-base:18.5.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/2a037ed150eacf7f64c08c0e457f8be6/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+116            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+116-->[com.google.android.gms:play-services-base:18.5.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/2a037ed150eacf7f64c08c0e457f8be6/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+117            android:exported="false"
+117-->[com.google.android.gms:play-services-base:18.5.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/2a037ed150eacf7f64c08c0e457f8be6/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+118            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+118-->[com.google.android.gms:play-services-base:18.5.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/2a037ed150eacf7f64c08c0e457f8be6/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+119        <activity
+119-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a19072a0da0aeb5d75b0210f7dc7ef03/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
+120            android:name="androidx.compose.ui.tooling.PreviewActivity"
+120-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a19072a0da0aeb5d75b0210f7dc7ef03/transformed/ui-tooling/AndroidManifest.xml:24:13-71
+121            android:exported="true" />
+121-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a19072a0da0aeb5d75b0210f7dc7ef03/transformed/ui-tooling/AndroidManifest.xml:25:13-36
+122
+123        <provider
+123-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+124            android:name="androidx.startup.InitializationProvider"
+124-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+125            android:authorities="com.tolstykh.blindduel.debug.androidx-startup"
+125-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+126            android:exported="false" >
+126-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+127            <meta-data
+127-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+128                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+128-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+129                android:value="androidx.startup" />
+129-->[androidx.emoji2:emoji2:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/9ac04c2a1996f78f443e653758493b66/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+130            <meta-data
+130-->[androidx.lifecycle:lifecycle-process:2.9.4] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/1266c0611263ab9c417f9b2d6e181881/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:29:13-31:52
+131                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+131-->[androidx.lifecycle:lifecycle-process:2.9.4] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/1266c0611263ab9c417f9b2d6e181881/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:30:17-78
+132                android:value="androidx.startup" />
+132-->[androidx.lifecycle:lifecycle-process:2.9.4] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/1266c0611263ab9c417f9b2d6e181881/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:31:17-49
+133            <meta-data
+133-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+134                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+134-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+135                android:value="androidx.startup" />
+135-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+136        </provider>
+137
+138        <activity
+138-->[androidx.compose.ui:ui-test-manifest:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/4c909488848ddb85eedbd210cb3af7a0/transformed/ui-test-manifest-1.9.0/AndroidManifest.xml:23:9-26:79
+139            android:name="androidx.activity.ComponentActivity"
+139-->[androidx.compose.ui:ui-test-manifest:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/4c909488848ddb85eedbd210cb3af7a0/transformed/ui-test-manifest-1.9.0/AndroidManifest.xml:24:13-63
+140            android:exported="true"
+140-->[androidx.compose.ui:ui-test-manifest:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/4c909488848ddb85eedbd210cb3af7a0/transformed/ui-test-manifest-1.9.0/AndroidManifest.xml:25:13-36
+141            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+141-->[androidx.compose.ui:ui-test-manifest:1.9.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/4c909488848ddb85eedbd210cb3af7a0/transformed/ui-test-manifest-1.9.0/AndroidManifest.xml:26:13-76
+142
+143        <receiver
+143-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+144            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+144-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+145            android:directBootAware="false"
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+146            android:enabled="true"
+146-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+147            android:exported="true"
+147-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+148            android:permission="android.permission.DUMP" >
+148-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+149            <intent-filter>
+149-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+150                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+150-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+150-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+151            </intent-filter>
+152            <intent-filter>
+152-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+153                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+153-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+153-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+154            </intent-filter>
+155            <intent-filter>
+155-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+156                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+156-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+156-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+157            </intent-filter>
+158            <intent-filter>
+158-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+159                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+159-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+159-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/15270767aea9900550b2c95cc4468a4a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+160            </intent-filter>
+161        </receiver>
+162
+163        <service
+163-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:29:9-35:19
+164            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+164-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:30:13-103
+165            android:exported="false" >
+165-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:31:13-37
+166            <meta-data
+166-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:32:13-34:39
+167                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+167-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:33:17-94
+168                android:value="cct" />
+168-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/04071b198acec0b4c13bfbc023e92e74/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:34:17-36
+169        </service>
+170        <service
+170-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:26:9-30:19
+171            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+171-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:27:13-117
+172            android:exported="false"
+172-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:28:13-37
+173            android:permission="android.permission.BIND_JOB_SERVICE" >
+173-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:29:13-69
+174        </service>
+175
+176        <receiver
+176-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:32:9-34:40
+177            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+177-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:33:13-132
+178            android:exported="false" />
+178-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/yuriytolstykh/.gradle/caches/8.13/transforms/a8d6008c374c72b0063ff0cd2b4ca2ae/transformed/transport-runtime-2.2.6/AndroidManifest.xml:34:13-37
+179    </application>
+180
+181</manifest>
