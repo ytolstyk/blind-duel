@@ -43,6 +43,11 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
      * the previous one, otherwise every new session stacks another infinite coroutine. */
     private var ambientMotionJob: Job? = null
 
+    /** Same one-at-a-time rule as [ambientMotionJob]. Periodically simulates an unprompted
+     * opponent shot so the incoming-projectile/hit-flash visuals are previewable in Solo Test
+     * Mode without waiting on [maybeFireBack]'s reactive chance. */
+    private var ambientFireJob: Job? = null
+
     override suspend fun startHosting(sessionCode: String) = simulateConnect()
 
     override suspend fun startJoining(sessionCode: String, localPlayerName: String) = simulateConnect()
@@ -93,13 +98,35 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
         ambientMotionJob = scope.launch {
             while (true) {
                 delay(GameConstants.HEADING_BROADCAST_INTERVAL_MS)
-                opponentHeadingDegrees = (opponentHeadingDegrees + Random.nextFloat() * 4f - 2f).mod(360f)
-                if (Random.nextFloat() < 0.03f) {
+                opponentHeadingDegrees = (
+                    opponentHeadingDegrees +
+                        Random.nextFloat() * GameConstants.PRACTICE_HEADING_JITTER_DEGREES -
+                        GameConstants.PRACTICE_HEADING_JITTER_DEGREES / 2f
+                    ).mod(360f)
+                if (Random.nextFloat() < GameConstants.PRACTICE_STEP_TRIGGER_PROBABILITY) {
                     opponentStepXMeters += (Random.nextFloat() * 2f - 1f) * GameConstants.STEP_LENGTH_METERS
                     opponentStepYMeters += (Random.nextFloat() * 2f - 1f) * GameConstants.STEP_LENGTH_METERS
                 }
                 _incomingMessages.tryEmit(
                     GameMessage.MotionUpdate(opponentHeadingDegrees, opponentStepXMeters, opponentStepYMeters)
+                )
+            }
+        }
+        startAmbientFireLoop()
+    }
+
+    private fun startAmbientFireLoop() {
+        ambientFireJob?.cancel()
+        ambientFireJob = scope.launch {
+            while (true) {
+                delay(
+                    Random.nextLong(
+                        GameConstants.PRACTICE_AMBIENT_FIRE_MIN_INTERVAL_MS,
+                        GameConstants.PRACTICE_AMBIENT_FIRE_MAX_INTERVAL_MS,
+                    )
+                )
+                _incomingMessages.tryEmit(
+                    GameMessage.FireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_AMBIENT_FIRE_HIT_PROBABILITY)
                 )
             }
         }
@@ -117,10 +144,12 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     }
 
     private fun maybeFireBack() {
-        if (Random.nextFloat() < 0.35f) {
+        if (Random.nextFloat() < GameConstants.PRACTICE_FIRE_BACK_PROBABILITY) {
             scope.launch {
                 delay(GameConstants.PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS)
-                _incomingMessages.tryEmit(GameMessage.FireEvent(hit = Random.nextFloat() < 0.5f))
+                _incomingMessages.tryEmit(
+                    GameMessage.FireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_FIRE_BACK_HIT_PROBABILITY)
+                )
             }
         }
     }
@@ -128,6 +157,8 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     override fun disconnect() {
         ambientMotionJob?.cancel()
         ambientMotionJob = null
+        ambientFireJob?.cancel()
+        ambientFireJob = null
         _connectionState.value = ConnectionState.Disconnected
     }
 

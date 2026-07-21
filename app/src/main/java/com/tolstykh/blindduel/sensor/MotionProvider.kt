@@ -14,6 +14,10 @@ import javax.inject.Singleton
 
 data class HeadingSample(val headingDegrees: Float, val accuracy: Int)
 
+/** Raw accelerometer x/y (m/s^2) — ambient decorative motion only (e.g. the duel screen's
+ * particle backdrop swirl), never used for gameplay/aiming. */
+data class TiltSample(val xAxis: Float, val yAxis: Float)
+
 /**
  * Wraps the compass (TYPE_ROTATION_VECTOR) and step detector (TYPE_STEP_DETECTOR) sensors
  * used by the dead-reckoning bearing model. If [isStepDetectionAvailable] is false (sensor
@@ -28,6 +32,7 @@ class MotionProvider @Inject constructor(
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     private val stepDetectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+    private val accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
     val isStepDetectionAvailable: Boolean get() = stepDetectorSensor != null
 
@@ -72,6 +77,24 @@ class MotionProvider @Inject constructor(
             override fun onAccuracyChanged(changedSensor: Sensor, accuracy: Int) = Unit
         }
         sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        awaitClose { sensorManager.unregisterListener(listener) }
+    }
+
+    /** Never emits if the accelerometer is unavailable — callers keep their last/default tilt. */
+    fun tiltUpdates(): Flow<TiltSample> = callbackFlow {
+        val sensor = accelerometerSensor
+        if (sensor == null) {
+            close()
+            return@callbackFlow
+        }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                trySend(TiltSample(event.values[0], event.values[1]))
+            }
+
+            override fun onAccuracyChanged(changedSensor: Sensor, accuracy: Int) = Unit
+        }
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
         awaitClose { sensorManager.unregisterListener(listener) }
     }
 }

@@ -42,6 +42,11 @@ data class DuelUiState(
 /** A just-fired shot, for the shooter's own on-screen projectile animation. */
 data class OutgoingShot(val aimAngleDegrees: Float, val firedAtMs: Long)
 
+/** An opponent's shot arriving locally, for the receiver's incoming-projectile animation.
+ * [bearingDegrees] is the receiver's own live bearing estimate to the opponent — there is no
+ * ground truth for the shooter's actual aim, only where we currently believe they are. */
+data class IncomingShot(val bearingDegrees: Float, val hit: Boolean, val receivedAtMs: Long)
+
 @HiltViewModel
 class DuelViewModel @Inject constructor(
     private val gameSession: GameSession,
@@ -69,6 +74,19 @@ class DuelViewModel @Inject constructor(
         private set
 
     var outgoingShot by mutableStateOf<OutgoingShot?>(null)
+        private set
+
+    var incomingShot by mutableStateOf<IncomingShot?>(null)
+        private set
+
+    /** Timestamp of the most recent landed hit against me — a trigger key for the duel
+     * screen's camera-shake effect, distinct from [outgoingShot] which triggers its own. */
+    var lastHitAtMs by mutableStateOf<Long?>(null)
+        private set
+
+    /** Ambient decorative accelerometer reading (m/s^2, x/y) — feeds the particle backdrop's
+     * swirl/parallax only, never gameplay. */
+    var deviceTilt by mutableStateOf(Offset.Zero)
         private set
 
     var sessionEnded by mutableStateOf(false)
@@ -106,6 +124,10 @@ class DuelViewModel @Inject constructor(
 
         motionProvider.stepEvents()
             .onEach { myStepVector += BearingModel.stepDelta(myHeadingDegrees, GameConstants.STEP_LENGTH_METERS) }
+            .launchIn(viewModelScope)
+
+        motionProvider.tiltUpdates()
+            .onEach { sample -> deviceTilt = Offset(sample.xAxis, sample.yAxis) }
             .launchIn(viewModelScope)
 
         connection.incomingMessages
@@ -171,30 +193,40 @@ class DuelViewModel @Inject constructor(
     }
 
     private fun onFireReceived(fireEvent: GameMessage.FireEvent) {
-        if (!fireEvent.hit) return
-        // Damage is always the fixed local constant, never a peer-supplied value — a
-        // modified client reporting an inflated FireEvent can't heal or over-damage either side.
-        val newHealth = HealthMath.applyDamage(uiState.myHealth, GameConstants.HIT_DAMAGE, GameConstants.MAX_PLAYER_HEALTH)
-        if (newHealth == 0 && myHealthZeroAtMs == null) {
-            myHealthZeroAtMs = System.currentTimeMillis()
-        }
-        // Reuse our own live bearing estimate as a proxy for "which way the hit came from" —
+        // Reuse our own live bearing estimate as a proxy for "which way the shot came from" —
         // the receiver has no ground truth for the shooter's aim, only its own belief of
-        // where the opponent currently is.
+        // where the opponent currently is. Used for the incoming-projectile visual regardless
+        // of hit/miss, and (on a hit) doubles as the damage-glow direction.
         val bearing = BearingModel.computeBearingToOpponentOnScreen(
             initialOpponentPosition = initialOpponentPosition,
             opponentStepVector = opponentStepVector,
             myStepVector = myStepVector,
             myCurrentHeadingDegrees = myHeadingDegrees,
         )
-        uiState = uiState.copy(myHealth = newHealth, damageFlash = true, damageDirectionDegrees = bearing)
-        haptics.hitFeedback()
+        incomingShot = IncomingShot(bearing, fireEvent.hit, System.currentTimeMillis())
+        if (!fireEvent.hit) return
+
+        // Damage is always the fixed local constant, never a peer-supplied value — a
+        // modified client reporting an inflated FireEvent can't heal or over-damage either side.
+        val newHealth = HealthMath.applyDamage(uiState.myHealth, GameConstants.HIT_DAMAGE, GameConstants.MAX_PLAYER_HEALTH)
+        if (newHealth == 0 && myHealthZeroAtMs == null) {
+            myHealthZeroAtMs = System.currentTimeMillis()
+        }
+        uiState = uiState.copy(myHealth = newHealth)
+        viewModelScope.launch { connection.sendMessage(GameMessage.HealthUpdate(newHealth)) }
+        refreshOutcome()
+
         viewModelScope.launch {
-            connection.sendMessage(GameMessage.HealthUpdate(newHealth))
+            // Delay the cosmetic flash/shake/haptic until the incoming projectile visually
+            // reaches the character, instead of firing them the instant the network message
+            // lands — health/outcome resolution above stays immediate and unaffected.
+            delay(GameConstants.PROJECTILE_TRAVEL_DURATION_MS)
+            lastHitAtMs = System.currentTimeMillis()
+            haptics.hitFeedback()
+            uiState = uiState.copy(damageFlash = true, damageDirectionDegrees = bearing)
             delay(GameConstants.DAMAGE_FLASH_DURATION_MS)
             uiState = uiState.copy(damageFlash = false)
         }
-        refreshOutcome()
     }
 
     private fun refreshOutcome() {
@@ -251,6 +283,12 @@ class DuelViewModel @Inject constructor(
     fun onProjectileAnimationFinished(firedAtMs: Long) {
         if (outgoingShot?.firedAtMs == firedAtMs) {
             outgoingShot = null
+        }
+    }
+
+    fun onIncomingProjectileAnimationFinished(receivedAtMs: Long) {
+        if (incomingShot?.receivedAtMs == receivedAtMs) {
+            incomingShot = null
         }
     }
 
