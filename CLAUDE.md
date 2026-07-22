@@ -145,3 +145,7 @@ Maintain `CHANGELOG.md` at the project root. Add an entry for every feature adde
 ### Fixed
 - Description of bug fix
 ```
+
+## Privacy Policy / EULA
+
+The Privacy Policy and EULA for this app are hosted in the sibling `eataburrita-site` repo (`/Users/yuriytolstykh/code/eataburrita-site`), at `src/BlindDuelPrivacy.tsx` (`/blind-duel/privacy`) and `src/BlindDuelEula.tsx` (`/blind-duel/eula`), routed in `src/App.tsx`. Whenever a change here substantially alters what those pages describe — permissions requested (`AndroidManifest.xml`, `permission/GamePermissions.kt`), data collected/transmitted, the peer-to-peer/no-server connectivity model, or third-party SDKs used (Nearby Connections, ML Kit, etc.) — update those two files in `eataburrita-site` to match and bump their "effective as of" date, even if not explicitly asked.

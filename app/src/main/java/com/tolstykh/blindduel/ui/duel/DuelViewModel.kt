@@ -34,13 +34,16 @@ data class DuelUiState(
     val opponentHealth: Int = GameConstants.MAX_PLAYER_HEALTH,
     val damageFlash: Boolean = false,
     val damageDirectionDegrees: Float? = null,
+    val showHitIndicator: Boolean = false,
     val showAccuracyWarning: Boolean = false,
     val showAlignmentWarning: Boolean = false,
     val outcome: DuelOutcome = DuelOutcome.Ongoing,
 )
 
-/** A just-fired shot, for the shooter's own on-screen projectile animation. */
-data class OutgoingShot(val aimAngleDegrees: Float, val firedAtMs: Long)
+/** A just-fired shot, for the shooter's own on-screen projectile animation. [wasHit] is already
+ * known locally at fire time (the shooter decides hit/miss unilaterally) — used to trigger the
+ * hit-confirmed indicator once the shot's on-screen animation finishes. */
+data class OutgoingShot(val aimAngleDegrees: Float, val firedAtMs: Long, val wasHit: Boolean)
 
 /** An opponent's shot arriving locally, for the receiver's incoming-projectile animation.
  * [bearingDegrees] is the receiver's own live bearing estimate to the opponent — there is no
@@ -271,7 +274,7 @@ class DuelViewModel @Inject constructor(
         )
         val hit = HitTest.testHit(aimAngle, bearing, GameConstants.HIT_ANGLE_TOLERANCE_DEGREES)
         firedAtMs = now
-        outgoingShot = OutgoingShot(aimAngle, now)
+        outgoingShot = OutgoingShot(aimAngle, now, hit)
         viewModelScope.launch {
             // Flat delay standing in for projectile flight time (see GameConstants doc) —
             // the opponent doesn't learn the outcome until this "travel time" elapses.
@@ -281,8 +284,17 @@ class DuelViewModel @Inject constructor(
     }
 
     fun onProjectileAnimationFinished(firedAtMs: Long) {
-        if (outgoingShot?.firedAtMs == firedAtMs) {
-            outgoingShot = null
+        val shot = outgoingShot ?: return
+        if (shot.firedAtMs != firedAtMs) return
+        outgoingShot = null
+        if (!shot.wasHit) return
+
+        viewModelScope.launch {
+            // Same timed on/off shape as the damageFlash toggle above — the ViewModel owns the
+            // indicator's visible window, DuelScreen only reads the resulting boolean.
+            uiState = uiState.copy(showHitIndicator = true)
+            delay(GameConstants.HIT_INDICATOR_DURATION_MS)
+            uiState = uiState.copy(showHitIndicator = false)
         }
     }
 

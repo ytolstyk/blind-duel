@@ -10,7 +10,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -41,8 +46,8 @@ import com.tolstykh.blindduel.ui.components.CALIBRATION_ALIGNMENT_HINT
 import com.tolstykh.blindduel.ui.components.COMPASS_ACCURACY_HINT
 import com.tolstykh.blindduel.ui.components.CooldownRing
 import com.tolstykh.blindduel.ui.components.DismissibleHintChip
-import com.tolstykh.blindduel.ui.components.HealthDots
 import com.tolstykh.blindduel.ui.components.KeepScreenOn
+import com.tolstykh.blindduel.ui.components.LabeledHealthDots
 import com.tolstykh.blindduel.ui.components.ParticleField
 import com.tolstykh.blindduel.ui.theme.DuelAccentEmber
 import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
@@ -100,6 +105,15 @@ fun DuelScreen(
             val durationMs = (GameConstants.PROJECTILE_TRAVEL_DURATION_MS * overshoot).toInt()
             incomingProjectileProgress.animateTo(overshoot, tween(durationMs, easing = LinearEasing))
             viewModel.onIncomingProjectileAnimationFinished(incomingShot.receivedAtMs)
+        }
+    }
+
+    // Explosion burst on the character, timed to viewModel.lastHitAtMs — the same trigger the
+    // camera shake uses — so it appears exactly as the incoming projectile reaches distance 0.
+    val explosionProgress = remember(viewModel.lastHitAtMs) { Animatable(0f) }
+    LaunchedEffect(viewModel.lastHitAtMs) {
+        if (viewModel.lastHitAtMs != null) {
+            explosionProgress.animateTo(1f, tween(GameConstants.EXPLOSION_DURATION_MS, easing = LinearEasing))
         }
     }
 
@@ -173,6 +187,10 @@ fun DuelScreen(
                         travelPhase = incomingProjectileProgress.value,
                     )
                 }
+
+                if (viewModel.lastHitAtMs != null && explosionProgress.value < 1f) {
+                    drawExplosion(center, characterRadiusPx, explosionProgress.value)
+                }
             }
         }
 
@@ -184,13 +202,34 @@ fun DuelScreen(
             )
         }
 
-        HealthDots(
+        LabeledHealthDots(
+            label = "YOU",
             remainingHealth = uiState.myHealth,
+            dotColor = DuelAccentEmber,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
                 .padding(16.dp),
         )
+
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(16.dp),
+        ) {
+            LabeledHealthDots(
+                label = "ENEMY",
+                remainingHealth = uiState.opponentHealth,
+                dotColor = DuelIncomingDanger,
+                horizontalAlignment = Alignment.End,
+            )
+            if (viewModel.isPracticeMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = viewModel::onLeavePracticeClicked) { Text("Leave Practice") }
+            }
+        }
 
         DuelCooldownRing(
             viewModel = viewModel,
@@ -199,15 +238,10 @@ fun DuelScreen(
                 .padding(16.dp),
         )
 
-        if (viewModel.isPracticeMode) {
-            TextButton(
-                onClick = viewModel::onLeavePracticeClicked,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(16.dp),
-            ) { Text("Leave Practice") }
-        }
+        DuelHitIndicator(
+            visible = uiState.showHitIndicator,
+            modifier = Modifier.align(Alignment.Center),
+        )
 
         if (uiState.showAccuracyWarning) {
             DismissibleHintChip(
@@ -244,6 +278,23 @@ private fun DuelCooldownRing(viewModel: DuelViewModel, modifier: Modifier = Modi
         progressFraction = viewModel.cooldownProgress,
         modifier = modifier,
     )
+}
+
+// [visible] itself only flips twice per landed hit (~0.4Hz, well under the file's ~5Hz
+// isolation threshold), but animateFloatAsState re-reads its value every animation frame while
+// fading — isolated into its own composable, same reasoning as [DuelCooldownRing] above, so
+// that per-frame read doesn't invalidate DuelScreen's body (and reallocate its Canvas lambda).
+@Composable
+private fun DuelHitIndicator(visible: Boolean, modifier: Modifier = Modifier) {
+    val alpha by animateFloatAsState(targetValue = if (visible) 1f else 0f, label = "hitIndicator")
+    if (alpha > 0f) {
+        Text(
+            text = "HIT",
+            color = DuelAccentViolet.copy(alpha = alpha),
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = modifier.offset(y = GameConstants.HIT_INDICATOR_VERTICAL_OFFSET_DP.dp),
+        )
+    }
 }
 
 // Device tilt updates at ~16Hz. A live projectile's position changes every animation frame
@@ -367,6 +418,33 @@ private fun DrawScope.drawAimLine(drag: Offset, center: Offset, maxRadiusPx: Flo
 private fun DrawScope.drawCharacter(rotationDegrees: Float, center: Offset, radiusPx: Float) {
     rotate(degrees = rotationDegrees, pivot = center) {
         drawCircle(color = DuelAccentEmber, radius = radiusPx, center = center)
+    }
+}
+
+/** Expanding, fading ring burst drawn on the character when an incoming shot lands — gives the
+ * impact a visible moment instead of the projectile simply reaching the character and vanishing. */
+private fun DrawScope.drawExplosion(center: Offset, characterRadiusPx: Float, progress: Float) {
+    val maxRadiusPx = GameConstants.EXPLOSION_MAX_RADIUS_DP.dp.toPx()
+    val coreAlpha = 1f - progress
+    drawCircle(
+        color = DuelIncomingDanger.copy(alpha = coreAlpha * GameConstants.EXPLOSION_CORE_ALPHA_MULTIPLIER),
+        radius = characterRadiusPx * (1f + progress),
+        center = center,
+    )
+    repeat(GameConstants.EXPLOSION_RING_COUNT) { index ->
+        // Clamped below 1 regardless of tuning: see the invariant documented next to
+        // EXPLOSION_RING_STAGGER in GameConstants — without this, a stagger*count combination
+        // that pushes a ring's delay to/past 1 would divide by zero or go negative below.
+        val delayFraction = (index * GameConstants.EXPLOSION_RING_STAGGER).coerceAtMost(0.9f)
+        val ringProgress = ((progress - delayFraction) / (1f - delayFraction)).coerceIn(0f, 1f)
+        if (ringProgress <= 0f || ringProgress >= 1f) return@repeat
+        val radius = characterRadiusPx + (maxRadiusPx - characterRadiusPx) * ringProgress
+        drawCircle(
+            color = DuelIncomingDanger.copy(alpha = (1f - ringProgress) * GameConstants.EXPLOSION_RING_ALPHA_MULTIPLIER),
+            radius = radius,
+            center = center,
+            style = Stroke(width = GameConstants.EXPLOSION_RING_STROKE_WIDTH_DP.dp.toPx()),
+        )
     }
 }
 

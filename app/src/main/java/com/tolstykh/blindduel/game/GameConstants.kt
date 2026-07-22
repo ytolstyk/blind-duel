@@ -62,6 +62,25 @@ object GameConstants {
     const val DAMAGE_FLASH_PEAK_ALPHA = 0.35f
     const val DAMAGE_OVERLAY_ALPHA_MULTIPLIER = 0.4f
 
+    // Impact explosion drawn on the character when an incoming shot lands — starts in lockstep
+    // with lastHitAtMs (itself delayed to match PROJECTILE_TRAVEL_DURATION_MS), so it appears
+    // exactly as the incoming projectile's travel animation reaches distance 0.
+    // Invariant: (EXPLOSION_RING_COUNT - 1) * EXPLOSION_RING_STAGGER must stay below 1 — each
+    // ring's progress is normalized by (1 - its stagger delay), so a stagger large enough to
+    // push a ring's delay to/past 1 would divide by zero or go negative.
+    const val EXPLOSION_DURATION_MS = 450
+    const val EXPLOSION_MAX_RADIUS_DP = 110f
+    const val EXPLOSION_RING_COUNT = 3
+    const val EXPLOSION_RING_STAGGER = 0.25f
+    const val EXPLOSION_RING_STROKE_WIDTH_DP = 4f
+    const val EXPLOSION_CORE_ALPHA_MULTIPLIER = 0.5f
+    const val EXPLOSION_RING_ALPHA_MULTIPLIER = 0.8f
+
+    // Hit indicator — confirms a landed shot on the opponent, whose character is never
+    // rendered on screen, so this is the only feedback that a fired shot actually hit.
+    const val HIT_INDICATOR_DURATION_MS = 700L
+    const val HIT_INDICATOR_VERTICAL_OFFSET_DP = -120f
+
     // Camera shake — triggered on firing (small) and on taking a hit (larger, and at a
     // slightly different cycle count so the two never look identical if they overlap).
     const val CAMERA_SHAKE_DURATION_MS = 260

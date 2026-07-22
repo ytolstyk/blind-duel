@@ -8,6 +8,9 @@
 - Projectiles now draw a wobbling flame-style tail, push nearby dust particles away as they travel, and trigger a camera shake on firing and on taking a hit.
 - Added an incoming-projectile visual for shots fired at you (flies in from your own live bearing estimate to the opponent; misses now visibly fly past and off-screen instead of only showing a flash).
 - Solo Test Mode now periodically simulates an unprompted opponent shot (occasionally a hit) so the incoming-projectile and hit-flash visuals can be previewed without needing to fire first.
+- An incoming hit now triggers an expanding, fading explosion burst on the character instead of the projectile just vanishing on arrival.
+- Landing a hit on the opponent now shows a fading "HIT" indicator, since the opponent's character is never rendered on screen and this was previously the only feedback missing that a shot connected.
+- The opponent's health is now shown alongside your own (top-end, labeled "ENEMY") instead of only your own health being visible.
 
 ### Fixed
 - Solo Test Mode (practice) never tracked the practice dummy's health, so landing hits never ended the duel or showed the win screen. `LoopbackGameConnection` now applies damage to a simulated opponent and echoes back `HealthUpdate`s, so 3 hits now resolves a win exactly like a real duel.
