@@ -9,11 +9,27 @@ object GameConstants {
     const val MAX_PLAYER_HEALTH = 3
     const val HIT_DAMAGE = 1
 
-    // Cooldown — the ring polls frequently for smooth progress, but the displayed
-    // seconds-remaining only ever changes once per second (Cooldown.secondsRemaining
-    // ceils), satisfying the "ticks once per second" request.
-    const val FIRE_COOLDOWN_MS = 2500L
-    const val COOLDOWN_RING_POLL_INTERVAL_MS = 50L
+    // Magazine / reload — three shots per magazine, then a long reload. This is the only pacing
+    // lever between shots now: firing has no per-shot cooldown of its own, only the magazine
+    // running dry (or a voluntary early reload) creates a break in the action.
+    const val MAGAZINE_SIZE = 3
+    const val RELOAD_DURATION_MS = 3500L
+    const val RELOAD_RING_POLL_INTERVAL_MS = 50L
+    const val RELOAD_TICKER_IDLE_POLL_INTERVAL_MS = 250L
+    // The "perfect zone" — tapping the reload ring while its dial is between these two fractions
+    // of RELOAD_DURATION_MS completes the reload instantly instead of waiting it out.
+    const val RELOAD_PERFECT_ZONE_START_FRACTION = 0.5f
+    const val RELOAD_PERFECT_ZONE_END_FRACTION = 0.8f
+    // A mistimed tap (outside the perfect zone) extends the remaining reload instead of being a
+    // free no-op, so spamming taps is never a winning strategy — see Reload.penalizedStartTime.
+    const val RELOAD_MISS_PENALTY_MS = 600L
+    const val RELOAD_MISS_FLASH_DURATION_MS = 200L
+    const val RELOAD_COMPLETE_FLASH_DURATION_MS = 700L
+    const val RELOAD_COMPLETE_FADE_IN_MS = 150
+    const val RELOAD_COMPLETE_FADE_OUT_MS = 300
+    const val RELOAD_RING_SIZE_DP = 56f
+    const val RELOAD_RING_STROKE_WIDTH_DP = 6f
+    const val RELOAD_RING_DIAL_RADIUS_DP = 5f
 
     // Aiming / accuracy
     const val AIM_MAX_DRAG_RADIUS_DP = 140f

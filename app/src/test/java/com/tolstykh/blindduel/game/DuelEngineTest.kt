@@ -134,21 +134,47 @@ class HealthMathTest {
     }
 }
 
-class CooldownTest {
-    private val cooldown = Cooldown(durationMs = 2000L)
+class ReloadTest {
+    private val reload = Reload(
+        durationMs = 2000L,
+        perfectZoneStartFraction = 0.5f,
+        perfectZoneEndFraction = 0.8f,
+        missPenaltyMs = 300L,
+    )
 
     @Test
-    fun `not ready immediately after firing, ready after duration elapses`() {
-        assertFalse(cooldown.isReady(firedAtMs = 1000L, nowMs = 1500L))
-        assertTrue(cooldown.isReady(firedAtMs = 1000L, nowMs = 3000L))
-        assertTrue(cooldown.isReady(firedAtMs = null, nowMs = 3000L))
+    fun `progressFraction climbs from 0 to 1 and clamps at both ends`() {
+        assertEquals(0f, reload.progressFraction(startedAtMs = 0L, nowMs = 0L), 0.001f)
+        assertEquals(0.5f, reload.progressFraction(startedAtMs = 0L, nowMs = 1000L), 0.001f)
+        assertEquals(1f, reload.progressFraction(startedAtMs = 0L, nowMs = 2000L), 0.001f)
+        assertEquals(1f, reload.progressFraction(startedAtMs = 0L, nowMs = 5000L), 0.001f) // past 100%, still clamped
+        assertEquals(0f, reload.progressFraction(startedAtMs = 500L, nowMs = 0L), 0.001f) // start in the future
     }
 
     @Test
-    fun `secondsRemaining rounds up so the UI never shows a false zero`() {
-        assertEquals(2, cooldown.secondsRemaining(firedAtMs = 0L, nowMs = 100L)) // 1900ms left -> 2
-        assertEquals(1, cooldown.secondsRemaining(firedAtMs = 0L, nowMs = 1500L)) // 500ms left -> 1
-        assertEquals(0, cooldown.secondsRemaining(firedAtMs = 0L, nowMs = 2000L))
+    fun `isComplete only once the full duration has elapsed`() {
+        assertFalse(reload.isComplete(startedAtMs = 0L, nowMs = 1999L))
+        assertTrue(reload.isComplete(startedAtMs = 0L, nowMs = 2000L))
+    }
+
+    @Test
+    fun `isInPerfectZone respects the 50 to 80 percent window inclusively`() {
+        assertFalse(reload.isInPerfectZone(startedAtMs = 0L, nowMs = 999L)) // 49.95%
+        assertTrue(reload.isInPerfectZone(startedAtMs = 0L, nowMs = 1000L)) // exactly 50%
+        assertTrue(reload.isInPerfectZone(startedAtMs = 0L, nowMs = 1600L)) // exactly 80%
+        assertFalse(reload.isInPerfectZone(startedAtMs = 0L, nowMs = 1601L))
+    }
+
+    @Test
+    fun `penalizedStartTime pushes the start forward by the penalty`() {
+        assertEquals(300L, reload.penalizedStartTime(startedAtMs = 0L, nowMs = 1000L))
+    }
+
+    @Test
+    fun `penalizedStartTime clamps to now so rapid mashing cannot push progress negative`() {
+        // Repeated miss-taps in quick succession would otherwise push startedAtMs past nowMs.
+        assertEquals(500L, reload.penalizedStartTime(startedAtMs = 400L, nowMs = 500L))
+        assertEquals(0f, reload.progressFraction(startedAtMs = 500L, nowMs = 500L), 0.001f)
     }
 }
 

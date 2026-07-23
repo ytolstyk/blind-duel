@@ -11,13 +11,13 @@ import com.tolstykh.blindduel.connection.GameMessage
 import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
 import com.tolstykh.blindduel.game.BearingModel
-import com.tolstykh.blindduel.game.Cooldown
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.GameSession
 import com.tolstykh.blindduel.game.HealthMath
 import com.tolstykh.blindduel.game.HitTest
 import com.tolstykh.blindduel.game.OutcomeResolver
+import com.tolstykh.blindduel.game.Reload
 import com.tolstykh.blindduel.game.Vector2
 import com.tolstykh.blindduel.sensor.Haptics
 import com.tolstykh.blindduel.sensor.MotionProvider
@@ -34,15 +34,31 @@ data class DuelUiState(
     val opponentHealth: Int = GameConstants.MAX_PLAYER_HEALTH,
     val damageFlash: Boolean = false,
     val damageDirectionDegrees: Float? = null,
-    val showHitIndicator: Boolean = false,
     val showAccuracyWarning: Boolean = false,
     val showAlignmentWarning: Boolean = false,
     val outcome: DuelOutcome = DuelOutcome.Ongoing,
-)
+    // Changes on every fired shot (not just reload start/end), same cadence as outgoingShot —
+    // safe to read directly in DuelScreen's body only because it's always written in the same
+    // synchronous call as outgoingShot, so they already coalesce into one recompose per shot. If
+    // outgoingShot's write is ever decoupled from firing (e.g. moved behind a delay), this field
+    // would become its own full-DuelScreen-recompose trigger and should move to an isolated
+    // composable the way reloadProgress already is.
+    val roundsRemaining: Int = GameConstants.MAGAZINE_SIZE,
+) {
+    // Derived, not stored: startReload()/completeReload() always empty/refill roundsRemaining
+    // in the same call that starts/ends a reload, so this can never desync from it. Flips at
+    // most twice per magazine cycle — well under the ~5Hz recomposition-isolation threshold that
+    // applies to reloadProgress below.
+    val isReloading: Boolean get() = roundsRemaining <= 0
+}
 
 /** A just-fired shot, for the shooter's own on-screen projectile animation. [wasHit] is already
- * known locally at fire time (the shooter decides hit/miss unilaterally) — used to trigger the
- * hit-confirmed indicator once the shot's on-screen animation finishes. */
+ * known locally at fire time (the shooter decides hit/miss unilaterally). This slot holds at
+ * most one shot — with no per-shot cooldown, a fast rapid-fire burst can overwrite it before its
+ * own animation finishes, which is why the "HIT" indicator (see [DuelViewModel.hitConfirmedAtMs])
+ * is scheduled independently from fire time rather than from this animation completing, so a
+ * confirmed hit is never silently dropped just because a later shot in the same burst replaced
+ * this slot first. */
 data class OutgoingShot(val aimAngleDegrees: Float, val firedAtMs: Long, val wasHit: Boolean)
 
 /** An opponent's shot arriving locally, for the receiver's incoming-projectile animation.
@@ -63,13 +79,21 @@ class DuelViewModel @Inject constructor(
     )
         private set
 
-    // Cooldown state is intentionally kept out of DuelUiState and updated at its own cadence:
-    // it changes ~20x/sec while a cooldown is active, and bundling it into the same state
-    // object as health/outcome/etc. would force the whole DuelScreen to recompose on every
-    // tick instead of just the CooldownRing that actually reads it.
-    var cooldownSecondsRemaining by mutableStateOf(0)
+    // Kept out of DuelUiState and updated at its own cadence: reloadProgress changes ~20x/sec
+    // while a reload is active, and bundling it into the same state object as health/outcome/etc.
+    // would force the whole DuelScreen to recompose on every tick instead of just the ReloadRing
+    // that actually reads it.
+    var reloadProgress by mutableStateOf(0f)
         private set
-    var cooldownProgress by mutableStateOf(0f)
+    var isInPerfectReloadZone by mutableStateOf(false)
+        private set
+
+    /** Trigger timestamp for the reload-complete animation — same pattern as [lastHitAtMs]. */
+    var reloadCompletedAtMs by mutableStateOf<Long?>(null)
+        private set
+
+    /** Trigger timestamp for the reload ring's miss-tap red flash — same pattern as [lastHitAtMs]. */
+    var reloadMissTapAtMs by mutableStateOf<Long?>(null)
         private set
 
     /** Raw drag offset from screen center, in px; magnitude is visual-only, hit-testing only uses angle. */
@@ -77,6 +101,14 @@ class DuelViewModel @Inject constructor(
         private set
 
     var outgoingShot by mutableStateOf<OutgoingShot?>(null)
+        private set
+
+    /** Trigger timestamp for the "HIT" confirmation indicator — scheduled directly from fire
+     * time (see [onAimRelease]) rather than from [outgoingShot]'s own animation completing, since
+     * a rapid-fire burst (no per-shot cooldown gates this anymore) can overwrite [outgoingShot]
+     * before an earlier shot's animation finishes; keying off an independent trigger timestamp
+     * means every landed hit gets its own confirmation window regardless of later shots. */
+    var hitConfirmedAtMs by mutableStateOf<Long?>(null)
         private set
 
     var incomingShot by mutableStateOf<IncomingShot?>(null)
@@ -98,8 +130,13 @@ class DuelViewModel @Inject constructor(
     val isPracticeMode: Boolean = gameSession.isPracticeMode
 
     private val connection get() = activeGameConnection.current
-    private val cooldown = Cooldown(GameConstants.FIRE_COOLDOWN_MS)
     private val outcomeResolver = OutcomeResolver(GameConstants.DRAW_WINDOW_MS)
+    private val reload = Reload(
+        durationMs = GameConstants.RELOAD_DURATION_MS,
+        perfectZoneStartFraction = GameConstants.RELOAD_PERFECT_ZONE_START_FRACTION,
+        perfectZoneEndFraction = GameConstants.RELOAD_PERFECT_ZONE_END_FRACTION,
+        missPenaltyMs = GameConstants.RELOAD_MISS_PENALTY_MS,
+    )
 
     private val myBaselineHeadingDegrees: Float = checkNotNull(gameSession.myBaselineHeadingDegrees) {
         "DuelViewModel requires calibration to have completed first"
@@ -112,8 +149,8 @@ class DuelViewModel @Inject constructor(
     private var myHeadingDegrees = myBaselineHeadingDegrees
     private var myStepVector = Vector2.ZERO
     private var opponentStepVector = Vector2.ZERO
-    private var firedAtMs: Long? = null
     private var myHealthZeroAtMs: Long? = null
+    private var reloadStartedAtMs: Long? = null
 
     init {
         motionProvider.headingUpdates()
@@ -146,7 +183,7 @@ class DuelViewModel @Inject constructor(
         }
 
         startMotionBroadcastLoop()
-        startCooldownTicker()
+        startReloadTicker()
     }
 
     private fun startMotionBroadcastLoop() {
@@ -160,23 +197,57 @@ class DuelViewModel @Inject constructor(
         }
     }
 
-    private fun startCooldownTicker() {
+    private fun startReloadTicker() {
         viewModelScope.launch {
             while (true) {
-                val firedAt = firedAtMs
-                if (firedAt == null) {
-                    delay(IDLE_POLL_INTERVAL_MS)
+                val startedAt = reloadStartedAtMs
+                if (startedAt == null) {
+                    delay(GameConstants.RELOAD_TICKER_IDLE_POLL_INTERVAL_MS)
                     continue
                 }
                 val now = System.currentTimeMillis()
-                val remainingMs = cooldown.remainingMs(firedAt, now)
-                cooldownSecondsRemaining = cooldown.secondsRemaining(firedAt, now)
-                cooldownProgress = remainingMs.toFloat() / GameConstants.FIRE_COOLDOWN_MS
-                if (remainingMs <= 0L) {
-                    firedAtMs = null // cooldown finished — next loop returns to idle polling
-                }
-                delay(GameConstants.COOLDOWN_RING_POLL_INTERVAL_MS)
+                reloadProgress = reload.progressFraction(startedAt, now)
+                isInPerfectReloadZone = reload.isInPerfectZone(startedAt, now)
+                if (reload.isComplete(startedAt, now)) completeReload()
+                delay(GameConstants.RELOAD_RING_POLL_INTERVAL_MS)
             }
+        }
+    }
+
+    /** Starts a reload, discarding any rounds still in the magazine — shared by the automatic
+     * (magazine emptied by firing) and voluntary ([onManualReloadRequested]) trigger paths. */
+    private fun startReload(now: Long) {
+        reloadStartedAtMs = now
+        uiState = uiState.copy(roundsRemaining = 0)
+    }
+
+    private fun completeReload() {
+        if (reloadStartedAtMs == null) return
+        reloadStartedAtMs = null
+        reloadProgress = 0f
+        isInPerfectReloadZone = false
+        uiState = uiState.copy(roundsRemaining = GameConstants.MAGAZINE_SIZE)
+        reloadCompletedAtMs = System.currentTimeMillis()
+    }
+
+    /** Voluntary early reload — lets the player top off before the magazine empties, forfeiting
+     * whatever rounds remain (same discard-on-reload convention as the automatic trigger). */
+    fun onManualReloadRequested() {
+        if (reloadStartedAtMs != null) return
+        if (uiState.roundsRemaining >= GameConstants.MAGAZINE_SIZE) return
+        startReload(System.currentTimeMillis())
+    }
+
+    /** A tap on the reload ring: completes the reload instantly if the dial is in the perfect
+     * zone, otherwise extends the remaining reload as a mistiming penalty. */
+    fun onReloadRingTapped() {
+        val startedAt = reloadStartedAtMs ?: return
+        val now = System.currentTimeMillis()
+        if (reload.isInPerfectZone(startedAt, now)) {
+            completeReload()
+        } else {
+            reloadStartedAtMs = reload.penalizedStartTime(startedAt, now)
+            reloadMissTapAtMs = now
         }
     }
 
@@ -254,16 +325,20 @@ class DuelViewModel @Inject constructor(
         uiState = uiState.copy(showAlignmentWarning = false)
     }
 
+    // No per-shot cooldown — the reload (see startReload above) is now the only pacing break
+    // between shots, so firing is gated solely on not currently being in one.
+    private fun canFire(): Boolean = !uiState.isReloading
+
     fun onAimDrag(offset: Offset) {
-        if (!cooldown.isReady(firedAtMs, System.currentTimeMillis())) return
+        if (!canFire()) return
         aimDrag = offset
     }
 
     fun onAimRelease() {
         val drag = aimDrag ?: return
         aimDrag = null
+        if (!canFire()) return
         val now = System.currentTimeMillis()
-        if (!cooldown.isReady(firedAtMs, now)) return
 
         val aimAngle = HitTest.angleFromDrag(drag.x, drag.y)
         val bearing = BearingModel.computeBearingToOpponentOnScreen(
@@ -273,13 +348,26 @@ class DuelViewModel @Inject constructor(
             myCurrentHeadingDegrees = myHeadingDegrees,
         )
         val hit = HitTest.testHit(aimAngle, bearing, GameConstants.HIT_ANGLE_TOLERANCE_DEGREES)
-        firedAtMs = now
         outgoingShot = OutgoingShot(aimAngle, now, hit)
+
+        val roundsAfterFiring = uiState.roundsRemaining - 1
+        uiState = uiState.copy(roundsRemaining = roundsAfterFiring)
+        if (roundsAfterFiring <= 0) startReload(now)
+
         viewModelScope.launch {
             // Flat delay standing in for projectile flight time (see GameConstants doc) —
             // the opponent doesn't learn the outcome until this "travel time" elapses.
             delay(GameConstants.PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS)
             connection.sendMessage(GameMessage.FireEvent(hit = hit))
+        }
+
+        if (hit) {
+            viewModelScope.launch {
+                // Scheduled from fire time, independent of outgoingShot's own animation slot —
+                // see hitConfirmedAtMs's doc for why (a rapid-fire burst can overwrite that slot).
+                delay(GameConstants.PROJECTILE_TRAVEL_DURATION_MS)
+                hitConfirmedAtMs = System.currentTimeMillis()
+            }
         }
     }
 
@@ -287,15 +375,6 @@ class DuelViewModel @Inject constructor(
         val shot = outgoingShot ?: return
         if (shot.firedAtMs != firedAtMs) return
         outgoingShot = null
-        if (!shot.wasHit) return
-
-        viewModelScope.launch {
-            // Same timed on/off shape as the damageFlash toggle above — the ViewModel owns the
-            // indicator's visible window, DuelScreen only reads the resulting boolean.
-            uiState = uiState.copy(showHitIndicator = true)
-            delay(GameConstants.HIT_INDICATOR_DURATION_MS)
-            uiState = uiState.copy(showHitIndicator = false)
-        }
     }
 
     fun onIncomingProjectileAnimationFinished(receivedAtMs: Long) {
@@ -308,9 +387,5 @@ class DuelViewModel @Inject constructor(
      * in [init] — DuelScreen already treats that the same as any other lost connection. */
     fun onLeavePracticeClicked() {
         viewModelScope.launch { connection.quit() }
-    }
-
-    private companion object {
-        const val IDLE_POLL_INTERVAL_MS = 250L
     }
 }

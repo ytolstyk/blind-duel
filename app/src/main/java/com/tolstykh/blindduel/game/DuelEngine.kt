@@ -2,7 +2,6 @@ package com.tolstykh.blindduel.game
 
 import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -105,16 +104,33 @@ object HealthMath {
         (currentHealth - damage).coerceIn(0, maxHealth)
 }
 
-/** Fire-cooldown state machine, driven by explicit timestamps so it's trivially testable. */
-class Cooldown(private val durationMs: Long) {
-    fun remainingMs(firedAtMs: Long, nowMs: Long): Long =
-        (durationMs - (nowMs - firedAtMs)).coerceAtLeast(0L)
+/**
+ * Manual-timed reload state machine, driven by explicit timestamps so it's trivially testable. A
+ * tap while the dial's progress is inside [perfectZoneStartFraction, perfectZoneEndFraction]
+ * completes the reload instantly (skill-based "active reload"); a mistimed tap instead extends it.
+ */
+class Reload(
+    private val durationMs: Long,
+    private val perfectZoneStartFraction: Float,
+    private val perfectZoneEndFraction: Float,
+    private val missPenaltyMs: Long,
+) {
+    fun progressFraction(startedAtMs: Long, nowMs: Long): Float =
+        ((nowMs - startedAtMs).toFloat() / durationMs).coerceIn(0f, 1f)
 
-    fun isReady(firedAtMs: Long?, nowMs: Long): Boolean =
-        firedAtMs == null || remainingMs(firedAtMs, nowMs) == 0L
+    fun isComplete(startedAtMs: Long, nowMs: Long): Boolean = progressFraction(startedAtMs, nowMs) >= 1f
 
-    fun secondsRemaining(firedAtMs: Long, nowMs: Long): Int =
-        ceil(remainingMs(firedAtMs, nowMs) / 1000.0).toInt()
+    fun isInPerfectZone(startedAtMs: Long, nowMs: Long): Boolean {
+        val progress = progressFraction(startedAtMs, nowMs)
+        return progress in perfectZoneStartFraction..perfectZoneEndFraction
+    }
+
+    /** A mistimed tap pushes the effective start time forward by [missPenaltyMs], extending the
+     * remaining reload — but clamped to never exceed [nowMs], so even continuous rapid mashing
+     * can only pin progress at exactly 0% (as if freshly restarted), never push it negative or
+     * leave a backlog once tapping stops. */
+    fun penalizedStartTime(startedAtMs: Long, nowMs: Long): Long =
+        (startedAtMs + missPenaltyMs).coerceAtMost(nowMs)
 }
 
 sealed interface DuelOutcome {

@@ -36,7 +36,7 @@ Type-safe Compose Navigation (`navigation/Navigation.kt`) with private `@Seriali
 - `Create` → `CreateScreen` — generates a 6-char session code, renders a ZXing-generated QR bitmap, advertises via Nearby Connections, waits for a peer
 - `Join` → `JoinScreen` — CameraX preview + ML Kit barcode scanner; decodes the QR, discovers the matching advertised endpoint, connects
 - `Calibration` → `CalibrationScreen` — mutual-ready handshake, then each device runs its own local 3-2-1 "face your opponent" countdown, captures its compass baseline heading, and exchanges it with the peer
-- `Duel` → `DuelScreen` — drag-to-aim / release-to-fire, cooldown, health, projectile animation, ambient particles
+- `Duel` → `DuelScreen` — drag-to-aim / release-to-fire, magazine/reload, health, projectile animation, ambient particles
 - `Result` → `ResultScreen` — win/lose/draw graphic; mutual-confirm rematch (both must send `RematchRequest`) or quit to `MainMenu`
 
 ### Connection Layer (`connection/`)
@@ -51,12 +51,12 @@ Type-safe Compose Navigation (`navigation/Navigation.kt`) with private `@Seriali
 
 ### Game Rules & Math (`game/`)
 
-- `GameConstants` — single object holding every tunable number (health, cooldown, aim/accuracy, projectile speed/size/travel time, character size, sensor broadcast interval, dead-reckoning tuning, draw window, etc.). Change gameplay feel here first.
+- `GameConstants` — single object holding every tunable number (health, magazine/reload, aim/accuracy, projectile speed/size/travel time, character size, sensor broadcast interval, dead-reckoning tuning, draw window, etc.). Change gameplay feel here first.
 - `DuelEngine.kt` — pure Kotlin, no Android deps, unit-tested (`app/src/test/`):
   - `AngleMath` — angle normalization/distance helpers
   - `BearingModel` — `computeInitialOpponentPosition`, `stepDelta` (heading → per-step displacement vector), `computeBearingToOpponentOnScreen`, `isAlignedFaceToFace`
   - `HitTest` — `angleFromDrag`, `testHit`
-  - `Cooldown` — fire-cooldown state math
+  - `Reload` — manual-timed reload state machine (progress, perfect-zone check, miss-tap penalty)
   - `DuelOutcome` (`Ongoing` / `Win` / `Loss` / `Draw`) + `OutcomeResolver` — resolves the simultaneous-double-elimination race using `GameConstants.DRAW_WINDOW_MS`
 - `GameSession` — Hilt singleton holding cross-screen duel state (player names, calibration baselines, final outcome). All fields are `private set`; mutated only through named methods (`recordLocalPlayerName`, `recordOpponentName`, `recordCalibration`, `recordOutcome`, `resetForNewDuel`) — never assign its fields directly from `ui/`.
 - `Vector2` — minimal `data class(x, y)` with `+`/`-` and `ZERO`.
@@ -72,6 +72,15 @@ This is the core, deliberately-imprecise mechanic — see the plan doc for full 
 5. On fire, the shooter locally computes hit/miss via `BearingModel.computeBearingToOpponentOnScreen` + `HitTest.testHit` and unilaterally decides the outcome (no server arbitration — an accepted 2-peer trust trade-off).
 6. Each device is authoritative only for its own health; broadcasts `HealthUpdate` whenever it changes. "I win" is only declared from the opponent's last-received `HealthUpdate` hitting 0, never from local-only state — this is what lets both sides agree on the outcome.
 
+### Magazine / Reload Mechanic
+
+The basic weapon holds `GameConstants.MAGAZINE_SIZE` (3) rounds. There is no per-shot cooldown — firing is gated solely on `roundsRemaining > 0`; the reload is the only pacing break between shots.
+
+- Firing the round that empties the magazine, or tapping the ammo-pip HUD row voluntarily (forfeiting any rounds left), starts a reload: `roundsRemaining` drops to 0 immediately and `DuelViewModel.reloadStartedAtMs` is set.
+- `Reload` (in `DuelEngine.kt`) is a pure, explicit-timestamp state machine: `progressFraction`/`isComplete`/`isInPerfectZone` (the 50%-80% window of `RELOAD_DURATION_MS`) / `penalizedStartTime` (a mistimed ring tap pushes the effective start time forward by `RELOAD_MISS_PENALTY_MS`, clamped so it can never exceed "now" — rapid mistimed mashing can only pin progress at 0%, never produce a runaway stall).
+- `DuelViewModel.startReloadTicker()` polls `Reload` while a reload is active and refills the magazine once complete (naturally, or via a well-timed tap on `ReloadRing`).
+- `DuelUiState.isReloading` is a derived property (`roundsRemaining <= 0`), not stored — `startReload()`/`completeReload()` always mutate `roundsRemaining` in the same call, so it can't desync.
+
 ### Sensors (`sensor/`)
 
 - `MotionProvider` — `headingUpdates(): Flow<HeadingSample>` (rotation-vector sensor via `callbackFlow`), `stepEvents(): Flow<Unit>` (step-detector sensor; flow simply never emits if the sensor is unavailable), `isAccuracyLow(accuracy)`.
@@ -84,13 +93,14 @@ API-level-conditional required-permission lists (Nearby/Bluetooth, camera, `ACTI
 ### UI Components (`ui/components/`)
 
 - `ParticleField` — ambient twinkling-star/dust background, `rememberInfiniteTransition`-driven (no manual polling loop)
-- `HealthDots`, `CooldownRing` (`CircularProgressIndicator`, lambda `progress = { }`)
+- `HealthDots`/`DotsRow`, `AmmoDots` (`LabeledAmmoDots`, tappable for a voluntary reload)
+- `ReloadRing` — hand-drawn Canvas ring (track + gold perfect-zone arc + moving dial dot) with its own circular-hit-tested tap gesture, since `CircularProgressIndicator` can't express a moving dial or a colored arc band
 - `DismissibleHintChip` — generic dismissible banner; used for both the compass-accuracy warning and the calibration-alignment warning
 - `KeepScreenOn` — uses `androidx.activity.compose.LocalActivity` (not a raw `Context` cast) during Calibration + Duel so screen timeout doesn't masquerade as a disconnect
 
 ### Duel Screen Recomposition Note
 
-`DuelViewModel.cooldownSecondsRemaining` / `cooldownProgress` update up to 20x/sec while a shot is on cooldown and are deliberately kept **out of** `DuelUiState` for that reason. In `DuelScreen.kt`, they're read only inside a nested `DuelCooldownRing(viewModel, modifier)` wrapper composable, never as direct arguments in `DuelScreen`'s own body — reading them directly there would tie `DuelScreen`'s whole recompose scope (including its `Canvas`, whose `onDraw` lambda is a plain non-memoized function type) to every cooldown tick. Preserve this pattern for any other high-frequency state added to this screen.
+`DuelViewModel.reloadProgress` / `isInPerfectReloadZone` update up to 20x/sec while a reload is active and are deliberately kept **out of** `DuelUiState` for that reason. In `DuelScreen.kt`, they're read only inside a nested `DuelReloadRing(viewModel, modifier)` wrapper composable, never as direct arguments in `DuelScreen`'s own body — reading them directly there would tie `DuelScreen`'s whole recompose scope (including its `Canvas`, whose `onDraw` lambda is a plain non-memoized function type) to every reload tick. Preserve this pattern for any other high-frequency state added to this screen.
 
 ## Key Files
 
@@ -106,7 +116,7 @@ API-level-conditional required-permission lists (Nearby/Bluetooth, camera, `ACTI
 | `connection/GameMessage.kt` | Sealed wire protocol + `toBytes()`/`toGameMessage()` |
 | `connection/SessionCode.kt` | Session code + QR payload encode/decode |
 | `game/GameConstants.kt` | Every tunable gameplay number — start here to retune feel |
-| `game/DuelEngine.kt` | Pure rules/math: angles, bearing model, hit test, cooldown, outcome resolution |
+| `game/DuelEngine.kt` | Pure rules/math: angles, bearing model, hit test, reload, outcome resolution |
 | `game/GameSession.kt` | Cross-screen duel state, encapsulated mutation methods only |
 | `sensor/MotionProvider.kt` | Compass heading + step-detector flows |
 | `sensor/Haptics.kt` | Hit vibration feedback |
@@ -115,20 +125,20 @@ API-level-conditional required-permission lists (Nearby/Bluetooth, camera, `ACTI
 | `ui/create/CreateScreen.kt` + `ViewModel` | QR generation + advertising |
 | `ui/join/JoinScreen.kt` + `ViewModel` | CameraX/ML Kit QR scanning + discovery |
 | `ui/calibration/CalibrationScreen.kt` + `ViewModel` | Ready handshake, countdown, baseline exchange (sealed `CalibrationPhase` state machine) |
-| `ui/duel/DuelScreen.kt` + `ViewModel` | Aim/fire/cooldown/health/projectile animation |
+| `ui/duel/DuelScreen.kt` + `ViewModel` | Aim/fire/magazine/reload/health/projectile animation |
 | `ui/result/ResultScreen.kt` + `ViewModel` | Win/lose/draw graphic, mutual-confirm rematch/quit |
-| `ui/components/` | `ParticleField`, `HealthDots`, `CooldownRing`, `DismissibleHintChip`, `KeepScreenOn` |
+| `ui/components/` | `ParticleField`, `HealthDots`/`DotsRow`, `AmmoDots`, `ReloadRing`, `DismissibleHintChip`, `KeepScreenOn` |
 | `gradle/libs.versions.toml` | All dependency versions (version catalog) |
 
 ## Testing
 
-`DuelEngine` (angle math, bearing model incl. the step-detector-unavailable degraded path, hit test, cooldown, and `OutcomeResolver`'s draw-window race) is fully unit tested under `app/src/test/java/com/tolstykh/blindduel/game/DuelEngineTest.kt` — pure Kotlin, no Android/instrumentation needed. Run `./gradlew test` before considering a task complete. Add tests for any new logic added to `game/`.
+`DuelEngine` (angle math, bearing model incl. the step-detector-unavailable degraded path, hit test, reload, and `OutcomeResolver`'s draw-window race) is fully unit tested under `app/src/test/java/com/tolstykh/blindduel/game/DuelEngineTest.kt` — pure Kotlin, no Android/instrumentation needed. Run `./gradlew test` before considering a task complete. Add tests for any new logic added to `game/`.
 
 **Not testable in this environment:** Nearby Connections requires two physical devices (doesn't work in the emulator). The QR-pairing → calibration → live-duel path is verified by code review and the Solo Test Mode loopback path, not by an actual two-phone session — treat this as the first thing to manually verify on real hardware after any change to `connection/` or the calibration/duel flow.
 
 ## Review Protocol Notes Specific to This Project
 
-- `game/GameConstants.kt` is the single source of truth for tunable numbers — never inline a magic number for health, cooldown, aim radius, projectile speed/size, character size, sensor tuning, or timing that has an equivalent constant already defined here.
+- `game/GameConstants.kt` is the single source of truth for tunable numbers — never inline a magic number for health, magazine/reload timing, aim radius, projectile speed/size, character size, sensor tuning, or timing that has an equivalent constant already defined here.
 - Never trust a peer-supplied damage/health delta in `connection/GameMessage.kt` handling — always recompute from local `GameConstants.HIT_DAMAGE` and `.coerceIn(0, GameConstants.MAX_PLAYER_HEALTH)`. This was a real security fix (unbounded-damage cheat vector), not a hypothetical.
 - Any state that updates faster than ~5Hz inside `DuelScreen` must be isolated into its own nested composable (see "Duel Screen Recomposition Note" above) rather than read directly in `DuelScreen`'s body.
 - `GameSession` must stay encapsulated (`private set` + named mutator methods) — do not reintroduce direct field writes from `ui/`.

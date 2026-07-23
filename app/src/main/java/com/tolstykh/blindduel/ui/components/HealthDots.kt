@@ -20,24 +20,42 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.tolstykh.blindduel.game.GameConstants
 
+/** A row of [totalCount] outline dots, the first [filledCount] of them filled — the shared shape
+ * behind both [HealthDots] and [LabeledAmmoDots], since both are "N of a fixed total, filled
+ * left to right" readouts. */
+@Composable
+fun DotsRow(
+    filledCount: Int,
+    totalCount: Int,
+    modifier: Modifier = Modifier,
+    dotColor: Color = MaterialTheme.colorScheme.secondary,
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(totalCount) { index ->
+            val isFilled = index < filledCount
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (isFilled) dotColor else Color.Transparent)
+                    .border(1.dp, dotColor, CircleShape),
+            )
+        }
+    }
+}
+
 @Composable
 fun HealthDots(
     remainingHealth: Int,
     modifier: Modifier = Modifier,
     dotColor: Color = MaterialTheme.colorScheme.secondary,
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        repeat(GameConstants.MAX_PLAYER_HEALTH) { index ->
-            val filled = index < remainingHealth
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(if (filled) dotColor else Color.Transparent)
-                    .border(1.dp, dotColor, CircleShape),
-            )
-        }
-    }
+    DotsRow(
+        filledCount = remainingHealth,
+        totalCount = GameConstants.MAX_PLAYER_HEALTH,
+        modifier = modifier,
+        dotColor = dotColor,
+    )
 }
 
 /** A labeled [HealthDots] row — used to tell my own health apart from the opponent's, since

@@ -11,6 +11,7 @@
 - An incoming hit now triggers an expanding, fading explosion burst on the character instead of the projectile just vanishing on arrival.
 - Landing a hit on the opponent now shows a fading "HIT" indicator, since the opponent's character is never rendered on screen and this was previously the only feedback missing that a shot connected.
 - The opponent's health is now shown alongside your own (top-end, labeled "ENEMY") instead of only your own health being visible.
+- Added a magazine/reload mechanic: the basic weapon now holds 3 rounds before requiring a reload. Reloading is shown as a ring with a dial that sweeps around once over its duration; tapping the ring while the dial is inside a highlighted "perfect zone" (50%-80% of the way through) completes the reload instantly, while a mistimed tap extends it instead. Reload can also be started voluntarily and early by tapping the new ammo-pip HUD row, forfeiting any rounds left in the magazine. A brief "RELOADED" pulse plays on completion. The prior per-shot fire cooldown has been removed entirely — the magazine/reload cycle is now the only pacing lever between shots, so all 3 rounds can be fired back-to-back before a reload is required.
 
 ### Fixed
 - Solo Test Mode (practice) never tracked the practice dummy's health, so landing hits never ended the duel or showed the win screen. `LoopbackGameConnection` now applies damage to a simulated opponent and echoes back `HealthUpdate`s, so 3 hits now resolves a win exactly like a real duel.

@@ -38,7 +38,7 @@ See [CLAUDE.md](CLAUDE.md) for a full architecture breakdown (screens/navigation
 
 ## Testing
 
-Core game logic (angle math, bearing model, hit test, cooldown, outcome resolution) is pure Kotlin and fully unit tested under `app/src/test/java/com/tolstykh/blindduel/game/DuelEngineTest.kt`:
+Core game logic (angle math, bearing model, hit test, reload, outcome resolution) is pure Kotlin and fully unit tested under `app/src/test/java/com/tolstykh/blindduel/game/DuelEngineTest.kt`:
 
 ```bash
 ./gradlew test

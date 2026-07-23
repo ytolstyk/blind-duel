@@ -23,7 +23,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -44,11 +46,12 @@ import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.HitTest
 import com.tolstykh.blindduel.ui.components.CALIBRATION_ALIGNMENT_HINT
 import com.tolstykh.blindduel.ui.components.COMPASS_ACCURACY_HINT
-import com.tolstykh.blindduel.ui.components.CooldownRing
 import com.tolstykh.blindduel.ui.components.DismissibleHintChip
 import com.tolstykh.blindduel.ui.components.KeepScreenOn
+import com.tolstykh.blindduel.ui.components.LabeledAmmoDots
 import com.tolstykh.blindduel.ui.components.LabeledHealthDots
 import com.tolstykh.blindduel.ui.components.ParticleField
+import com.tolstykh.blindduel.ui.components.ReloadRing
 import com.tolstykh.blindduel.ui.theme.DuelAccentEmber
 import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
 import com.tolstykh.blindduel.ui.theme.DuelAccentVioletDim
@@ -59,6 +62,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 @Composable
 fun DuelScreen(
@@ -231,15 +235,31 @@ fun DuelScreen(
             }
         }
 
-        DuelCooldownRing(
-            viewModel = viewModel,
+        Column(
+            horizontalAlignment = Alignment.End,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
-        )
+        ) {
+            LabeledAmmoDots(
+                label = "AMMO",
+                roundsRemaining = uiState.roundsRemaining,
+                dotColor = DuelAccentEmber,
+                onTap = viewModel::onManualReloadRequested,
+                horizontalAlignment = Alignment.End,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DuelReloadCompleteIndicator(
+                triggerKey = viewModel.reloadCompletedAtMs,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+            if (uiState.isReloading) {
+                DuelReloadRing(viewModel = viewModel)
+            }
+        }
 
         DuelHitIndicator(
-            visible = uiState.showHitIndicator,
+            triggerKey = viewModel.hitConfirmedAtMs,
             modifier = Modifier.align(Alignment.Center),
         )
 
@@ -265,27 +285,61 @@ fun DuelScreen(
     }
 }
 
-// Cooldown state changes up to 20x/sec while a shot is on cooldown. Reading it here as a
-// nested @Composable call (rather than as CooldownRing(...) arguments resolved directly in
-// DuelScreen's own body) scopes recomposition to just this function — resolving it inline in
+// reloadProgress/isInPerfectReloadZone update ~20x/sec while a reload is active. Reading them
+// here as a nested @Composable call (rather than as ReloadRing(...) arguments resolved directly
+// in DuelScreen's own body) scopes recomposition to just this function — resolving it inline in
 // DuelScreen would invalidate DuelScreen's whole restart scope on every tick, including the
 // Canvas above, since Canvas's onDraw lambda is a plain (non-@Composable) function type that
 // isn't automatically memoized and would be reallocated — and therefore redrawn — every time.
 @Composable
-private fun DuelCooldownRing(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
-    CooldownRing(
-        secondsRemaining = viewModel.cooldownSecondsRemaining,
-        progressFraction = viewModel.cooldownProgress,
+private fun DuelReloadRing(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    ReloadRing(
+        progressFraction = viewModel.reloadProgress,
+        isInPerfectZone = viewModel.isInPerfectReloadZone,
+        missTapAtMs = viewModel.reloadMissTapAtMs,
+        onTap = viewModel::onReloadRingTapped,
         modifier = modifier,
     )
 }
 
-// [visible] itself only flips twice per landed hit (~0.4Hz, well under the file's ~5Hz
-// isolation threshold), but animateFloatAsState re-reads its value every animation frame while
-// fading — isolated into its own composable, same reasoning as [DuelCooldownRing] above, so
-// that per-frame read doesn't invalidate DuelScreen's body (and reallocate its Canvas lambda).
+// triggerKey-driven, same pattern as the camera shake in DuelShakeLayer below — a fresh
+// Animatable per distinct reloadCompletedAtMs value, so the ViewModel never needs to reset a
+// persistent "visible" flag back to false itself.
 @Composable
-private fun DuelHitIndicator(visible: Boolean, modifier: Modifier = Modifier) {
+private fun DuelReloadCompleteIndicator(triggerKey: Long?, modifier: Modifier = Modifier) {
+    val alpha = remember(triggerKey) { Animatable(0f) }
+    LaunchedEffect(triggerKey) {
+        if (triggerKey == null) return@LaunchedEffect
+        alpha.animateTo(1f, tween(GameConstants.RELOAD_COMPLETE_FADE_IN_MS, easing = LinearEasing))
+        delay(GameConstants.RELOAD_COMPLETE_FLASH_DURATION_MS)
+        alpha.animateTo(0f, tween(GameConstants.RELOAD_COMPLETE_FADE_OUT_MS, easing = LinearEasing))
+    }
+    if (alpha.value > 0f) {
+        Text(
+            text = "RELOADED",
+            color = DuelAccentEmber.copy(alpha = alpha.value),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = modifier,
+        )
+    }
+}
+
+// Keyed off a trigger timestamp rather than a shared boolean (same reasoning as
+// DuelReloadCompleteIndicator above) so that a rapid-fire burst of hits — now reachable with no
+// per-shot cooldown gating fire rate — gives each landed hit its own independent show/hide
+// window: `visible` and its LaunchedEffect are both scoped to `remember(triggerKey)`, so an
+// earlier hit's delayed "hide" can never stomp a later hit's indicator still in its window.
+// Isolated into its own composable, same reasoning as [DuelReloadRing] above, so the per-frame
+// animateFloatAsState read doesn't invalidate DuelScreen's body (and reallocate its Canvas lambda).
+@Composable
+private fun DuelHitIndicator(triggerKey: Long?, modifier: Modifier = Modifier) {
+    var visible by remember(triggerKey) { mutableStateOf(false) }
+    LaunchedEffect(triggerKey) {
+        if (triggerKey == null) return@LaunchedEffect
+        visible = true
+        delay(GameConstants.HIT_INDICATOR_DURATION_MS)
+        visible = false
+    }
     val alpha by animateFloatAsState(targetValue = if (visible) 1f else 0f, label = "hitIndicator")
     if (alpha > 0f) {
         Text(
@@ -302,7 +356,7 @@ private fun DuelHitIndicator(visible: Boolean, modifier: Modifier = Modifier) {
 // itself, inside its own Canvas draw phase, via the activeProjectileOffset lambda below — not
 // here in this composable's body. Resolving it here instead would subscribe *this composable's
 // recomposition* to every animation frame of a shot (on top of the already-isolated tilt churn),
-// same mistake [DuelCooldownRing] above documents avoiding for the cooldown ring.
+// same mistake [DuelReloadRing] above documents avoiding for the reload ring.
 @Composable
 private fun DuelParticleBackdrop(
     viewModel: DuelViewModel,
@@ -337,7 +391,7 @@ private fun offsetFromCenter(angleDegrees: Float, distancePx: Float): Offset {
 }
 
 // Camera shake on firing (small) and on taking a hit (larger). Isolated into its own
-// composable — like [DuelCooldownRing] and [DuelParticleBackdrop] above — so the per-frame
+// composable — like [DuelReloadRing] and [DuelParticleBackdrop] above — so the per-frame
 // graphicsLayer reads driving the shake don't invalidate DuelScreen's own recompose scope; the
 // wrapped [Box]'s graphicsLayer block is a draw-phase closure, so reading Animatable.value
 // inside it only triggers a redraw of this layer, not a recomposition.
