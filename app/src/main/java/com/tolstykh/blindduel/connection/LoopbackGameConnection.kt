@@ -84,6 +84,14 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
                 delay(REMATCH_ECHO_DELAY_MS)
                 _incomingMessages.tryEmit(GameMessage.RematchRequest)
             }
+            // The initial Solo Test entry gets its opponent ReadyForDuel for free from
+            // simulateConnect(), but a rematch re-enters Calibration without re-hosting, so
+            // that auto-emit never fires again — echo it here or rematch calibration hangs
+            // on "Waiting for opponent…" forever.
+            is GameMessage.ReadyForDuel -> scope.launch {
+                delay(READY_ECHO_DELAY_MS)
+                _incomingMessages.tryEmit(GameMessage.ReadyForDuel)
+            }
             is GameMessage.Quit -> disconnect()
             else -> Unit
         }
@@ -166,6 +174,7 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
         const val CONNECT_SIMULATION_DELAY_MS = 400L
         const val CALIBRATION_ECHO_DELAY_MS = 200L
         const val REMATCH_ECHO_DELAY_MS = 300L
+        const val READY_ECHO_DELAY_MS = 300L
         const val SIMULATED_HEALTH_UPDATE_DELAY_MS = 100L
     }
 }
