@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.data.AppPreferencesRepository
 import com.tolstykh.blindduel.game.GameSession
+import com.tolstykh.blindduel.game.WeaponType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +24,13 @@ class MainMenuViewModel @Inject constructor(
     private val appPrefs: AppPreferencesRepository,
 ) : ViewModel() {
     var playerName by mutableStateOf("")
+        private set
+
+    /** Solo Test-only options, shown in the debug-gated section of the main menu. Not
+     * persisted — these are testing conveniences, reset each process start, unlike [playerName]. */
+    var soloTestWeapon by mutableStateOf(WeaponType.PISTOL)
+        private set
+    var soloTestCratesEnabled by mutableStateOf(true)
         private set
 
     private var saveNameJob: Job? = null
@@ -50,20 +58,28 @@ class MainMenuViewModel @Inject constructor(
 
     fun prepareToHost() {
         commitPlayerName()
-        gameSession.recordPracticeMode(false)
+        gameSession.exitPracticeMode()
         activeGameConnection.selectNearby()
     }
 
     fun prepareToJoin() {
         commitPlayerName()
-        gameSession.recordPracticeMode(false)
+        gameSession.exitPracticeMode()
         activeGameConnection.selectNearby()
+    }
+
+    fun onSoloTestWeaponChanged(weapon: WeaponType) {
+        soloTestWeapon = weapon
+    }
+
+    fun onSoloTestCratesEnabledChanged(enabled: Boolean) {
+        soloTestCratesEnabled = enabled
     }
 
     fun startSoloTest() {
         commitPlayerName()
-        gameSession.recordOpponentName("Practice Dummy")
-        gameSession.recordPracticeMode(true)
+        gameSession.recordOpponentName(PRACTICE_DUMMY_NAME)
+        gameSession.enterPracticeMode(startingWeapon = soloTestWeapon, cratesEnabled = soloTestCratesEnabled)
         activeGameConnection.selectLoopback()
         // Solo Test Mode skips Create/Join (the screens that normally call startHosting/
         // startJoining), so kick off the loopback "connection" directly here.
@@ -72,6 +88,7 @@ class MainMenuViewModel @Inject constructor(
 
     private companion object {
         const val SOLO_TEST_SESSION_CODE = "SOLO"
+        const val PRACTICE_DUMMY_NAME = "Practice Dummy"
         const val NAME_SAVE_DEBOUNCE_MS = 500L
     }
 }

@@ -28,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -41,9 +43,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tolstykh.blindduel.game.CrateMath
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.HitTest
+import com.tolstykh.blindduel.game.WeaponType
 import com.tolstykh.blindduel.ui.components.CALIBRATION_ALIGNMENT_HINT
 import com.tolstykh.blindduel.ui.components.COMPASS_ACCURACY_HINT
 import com.tolstykh.blindduel.ui.components.DismissibleHintChip
@@ -55,13 +59,16 @@ import com.tolstykh.blindduel.ui.components.ReloadRing
 import com.tolstykh.blindduel.ui.theme.DuelAccentEmber
 import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
 import com.tolstykh.blindduel.ui.theme.DuelAccentVioletDim
+import com.tolstykh.blindduel.ui.theme.DuelCrateAccent
 import com.tolstykh.blindduel.ui.theme.DuelIncomingDanger
 import com.tolstykh.blindduel.ui.theme.DuelIncomingDangerDim
+import com.tolstykh.blindduel.ui.theme.DuelLaserBeam
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 @Composable
@@ -76,6 +83,7 @@ fun DuelScreen(
     val aimDrag = viewModel.aimDrag
     val outgoingShot = viewModel.outgoingShot
     val incomingShot = viewModel.incomingShot
+    val activeCrate = viewModel.activeCrate
 
     LaunchedEffect(uiState.outcome) {
         if (uiState.outcome != DuelOutcome.Ongoing) onDuelOver()
@@ -94,7 +102,7 @@ fun DuelScreen(
         LaunchedEffect(outgoingShot.firedAtMs) {
             projectileProgress.animateTo(
                 1f,
-                tween(GameConstants.PROJECTILE_TRAVEL_DURATION_MS.toInt(), easing = LinearEasing),
+                tween(outgoingShot.travelDurationMs.toInt(), easing = LinearEasing),
             )
             viewModel.onProjectileAnimationFinished(outgoingShot.firedAtMs)
         }
@@ -106,10 +114,21 @@ fun DuelScreen(
             // A miss overshoots past the character and off the far side instead of stopping —
             // a hit's arrival is timed to match DuelViewModel's delayed flash/shake trigger.
             val overshoot = if (incomingShot.hit) 1f else GameConstants.INCOMING_MISS_OVERSHOOT_MULTIPLIER
-            val durationMs = (GameConstants.PROJECTILE_TRAVEL_DURATION_MS * overshoot).toInt()
+            val durationMs = (incomingShot.travelDurationMs * overshoot).toInt()
             incomingProjectileProgress.animateTo(overshoot, tween(durationMs, easing = LinearEasing))
             viewModel.onIncomingProjectileAnimationFinished(incomingShot.receivedAtMs)
         }
+    }
+
+    // Shotgun pellet jitter angles: computed once per shot (remember, keyed on the shot's own
+    // timestamp) rather than allocating a fresh Random and re-rolling every draw-phase frame —
+    // the seed already made this deterministic per shot, so re-rolling every frame was pure
+    // waste, not a correctness issue, but avoidable in the hottest render path in this file.
+    val outgoingPelletJitters = remember(outgoingShot?.firedAtMs) {
+        if (outgoingShot?.weaponType == WeaponType.SHOTGUN) shotgunPelletJitters(outgoingShot.firedAtMs) else emptyList()
+    }
+    val incomingPelletJitters = remember(incomingShot?.receivedAtMs) {
+        if (incomingShot?.weaponType == WeaponType.SHOTGUN) shotgunPelletJitters(incomingShot.receivedAtMs) else emptyList()
     }
 
     // Explosion burst on the character, timed to viewModel.lastHitAtMs — the same trigger the
@@ -121,6 +140,25 @@ fun DuelScreen(
         }
     }
 
+    // A crate's one-shot fall animation — not rememberInfiniteTransition (that's for
+    // ParticleField's endless ambient loop). Keyed on the crate's id so picking it up mid-fall
+    // (activeCrate transitions to null, changing the key) cancels this LaunchedEffect and never
+    // calls onCrateLanded for a crate that's already been cleared by the pickup itself.
+    val crateFallProgress = remember(activeCrate?.id) { Animatable(0f) }
+    if (activeCrate != null) {
+        LaunchedEffect(activeCrate.id) {
+            crateFallProgress.animateTo(1f, tween(activeCrate.fallDurationMs.toInt(), easing = LinearEasing))
+            viewModel.onCrateLanded(activeCrate.id)
+        }
+    }
+
+    // Pixels-per-dp — passed to the ViewModel (which has no Compose/Android dependency of its
+    // own) so it can convert the crate's logical-dp position into the same px space the raw
+    // drag offset is already in for a real Euclidean hit-test, and scale the bow's max drag
+    // radius the same way.
+    val density = LocalDensity.current
+    val densityPxPerDp = remember(density) { with(density) { 1.dp.toPx() } }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -129,8 +167,8 @@ fun DuelScreen(
                 detectDragGestures(
                     onDragStart = { start -> viewModel.onAimDrag(start - centerOf(size)) },
                     onDrag = { change, _ -> viewModel.onAimDrag(change.position - centerOf(size)) },
-                    onDragEnd = { viewModel.onAimRelease() },
-                    onDragCancel = { viewModel.onAimRelease() },
+                    onDragEnd = { viewModel.onAimRelease(densityPxPerDp) },
+                    onDragCancel = { viewModel.onAimRelease(densityPxPerDp) },
                 )
             },
     ) {
@@ -158,42 +196,101 @@ fun DuelScreen(
                     }
                 }
 
+                // Dimmed while out of ammo: aimDrag now stays live even mid-reload (crate
+                // targeting needs it), so a reduced-alpha aim line/character is the visible
+                // "you can still aim but can't shoot yet" signal instead of looking identical
+                // to a normal, ready-to-fire aim.
+                val canFireNow = !uiState.isReloading
+                val aimAlpha = if (canFireNow) 1f else GameConstants.OUT_OF_AMMO_AIM_ALPHA
+
                 aimDrag?.let { drag ->
-                    drawAimLine(drag, center, GameConstants.AIM_MAX_DRAG_RADIUS_DP.dp.toPx())
+                    drawAimLine(drag, center, GameConstants.AIM_MAX_DRAG_RADIUS_DP.dp.toPx(), aimAlpha)
                 }
 
                 val rotationDegrees = aimDrag?.let { HitTest.angleFromDrag(it.x, it.y) } ?: 0f
-                drawCharacter(rotationDegrees, center, characterRadiusPx)
+                drawCharacter(rotationDegrees, center, characterRadiusPx, aimAlpha)
 
                 val projectileRadiusPx = GameConstants.PROJECTILE_SIZE_DP.dp.toPx() / 2f
                 val travelDistancePx = GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP.dp.toPx()
 
                 if (outgoingShot != null) {
-                    drawProjectile(
-                        angleDegrees = outgoingShot.aimAngleDegrees,
-                        distancePx = projectileProgress.value * travelDistancePx,
-                        center = center,
-                        radiusPx = projectileRadiusPx,
-                        headColor = DuelAccentViolet,
-                        tailColor = DuelAccentVioletDim,
-                        travelPhase = projectileProgress.value,
+                    if (outgoingShot.weaponType == WeaponType.SHOTGUN) {
+                        drawShotgunPellets(
+                            aimAngleDegrees = outgoingShot.aimAngleDegrees,
+                            distancePx = projectileProgress.value * travelDistancePx,
+                            center = center,
+                            radiusPx = projectileRadiusPx,
+                            headColor = DuelAccentViolet,
+                            tailColor = DuelAccentVioletDim,
+                            travelPhase = projectileProgress.value,
+                            jitterDegrees = outgoingPelletJitters,
+                        )
+                    } else {
+                        drawProjectile(
+                            angleDegrees = outgoingShot.aimAngleDegrees,
+                            distancePx = projectileProgress.value * travelDistancePx,
+                            center = center,
+                            radiusPx = projectileRadiusPx,
+                            headColor = DuelAccentViolet,
+                            tailColor = DuelAccentVioletDim,
+                            travelPhase = projectileProgress.value,
+                        )
+                    }
+                }
+
+                // The laser's own live sweeping beam — a plain value with no fade/smoothing, read
+                // directly here (draw phase) rather than hoisted into the composable body, the
+                // same treatment as projectileProgress.value above, so a ~20Hz-updating angle
+                // doesn't force this whole composable to recompose.
+                viewModel.laserBeamAngleDegrees?.let { angle ->
+                    drawLine(
+                        color = DuelLaserBeam,
+                        start = center,
+                        end = center + offsetFromCenter(angle, travelDistancePx),
+                        strokeWidth = GameConstants.AIM_LINE_STROKE_WIDTH_DP.dp.toPx() * GameConstants.LASER_BEAM_WIDTH_MULTIPLIER,
                     )
                 }
 
                 if (incomingShot != null) {
-                    drawProjectile(
-                        angleDegrees = incomingShot.bearingDegrees,
-                        distancePx = travelDistancePx * (1f - incomingProjectileProgress.value),
-                        center = center,
-                        radiusPx = projectileRadiusPx,
-                        headColor = DuelIncomingDanger,
-                        tailColor = DuelIncomingDangerDim,
-                        travelPhase = incomingProjectileProgress.value,
-                    )
+                    if (incomingShot.weaponType == WeaponType.SHOTGUN) {
+                        drawShotgunPellets(
+                            aimAngleDegrees = incomingShot.bearingDegrees,
+                            distancePx = travelDistancePx * (1f - incomingProjectileProgress.value),
+                            center = center,
+                            radiusPx = projectileRadiusPx,
+                            headColor = DuelIncomingDanger,
+                            tailColor = DuelIncomingDangerDim,
+                            travelPhase = incomingProjectileProgress.value,
+                            jitterDegrees = incomingPelletJitters,
+                        )
+                    } else {
+                        drawProjectile(
+                            angleDegrees = incomingShot.bearingDegrees,
+                            distancePx = travelDistancePx * (1f - incomingProjectileProgress.value),
+                            center = center,
+                            radiusPx = projectileRadiusPx,
+                            headColor = DuelIncomingDanger,
+                            tailColor = DuelIncomingDangerDim,
+                            travelPhase = incomingProjectileProgress.value,
+                        )
+                    }
                 }
 
                 if (viewModel.lastHitAtMs != null && explosionProgress.value < 1f) {
                     drawExplosion(center, characterRadiusPx, explosionProgress.value)
+                }
+
+                if (activeCrate != null && crateFallProgress.value < 1f) {
+                    val offsetDp = CrateMath.currentOffsetDp(
+                        progress = crateFallProgress.value,
+                        laneXDp = activeCrate.laneXDp,
+                        topYDp = GameConstants.CRATE_SPAWN_TOP_Y_DP,
+                        bottomYDp = GameConstants.CRATE_LAND_BOTTOM_Y_DP,
+                        wobbleAmplitudeDp = GameConstants.CRATE_WOBBLE_AMPLITUDE_DP,
+                        wobbleFrequency = GameConstants.CRATE_WOBBLE_FREQUENCY,
+                    )
+                    val cratePx = center + Offset(offsetDp.x.dp.toPx(), offsetDp.y.dp.toPx())
+                    drawCrate(cratePx, GameConstants.CRATE_SIZE_DP.dp.toPx())
                 }
             }
         }
@@ -205,6 +302,8 @@ fun DuelScreen(
                     .background(Color.Red.copy(alpha = flashAlpha * GameConstants.DAMAGE_OVERLAY_ALPHA_MULTIPLIER)),
             )
         }
+
+        DuelSniperLaserDot(viewModel = viewModel, modifier = Modifier.fillMaxSize())
 
         LabeledHealthDots(
             label = "YOU",
@@ -247,6 +346,7 @@ fun DuelScreen(
                 dotColor = DuelAccentEmber,
                 onTap = viewModel::onManualReloadRequested,
                 horizontalAlignment = Alignment.End,
+                magazineSize = uiState.equippedWeaponConfig.magazineSize,
             )
             Spacer(modifier = Modifier.height(8.dp))
             DuelReloadCompleteIndicator(
@@ -255,6 +355,8 @@ fun DuelScreen(
             )
             if (uiState.isReloading) {
                 DuelReloadRing(viewModel = viewModel)
+            } else {
+                DuelBowChargeIndicator(viewModel = viewModel)
             }
         }
 
@@ -293,13 +395,54 @@ fun DuelScreen(
 // isn't automatically memoized and would be reallocated — and therefore redrawn — every time.
 @Composable
 private fun DuelReloadRing(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    val config = viewModel.uiState.equippedWeaponConfig
     ReloadRing(
         progressFraction = viewModel.reloadProgress,
         isInPerfectZone = viewModel.isInPerfectReloadZone,
         missTapAtMs = viewModel.reloadMissTapAtMs,
         onTap = viewModel::onReloadRingTapped,
         modifier = modifier,
+        perfectZoneStartFraction = config.reloadPerfectZoneStartFraction,
+        perfectZoneEndFraction = config.reloadPerfectZoneEndFraction,
     )
+}
+
+// bowChargeProgress ticks ~20x/sec while actively drawing the bow — isolated into its own
+// composable for exactly the same reason as [DuelReloadRing] above.
+@Composable
+private fun DuelBowChargeIndicator(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    if (viewModel.uiState.equippedWeapon != WeaponType.BOW || viewModel.aimDrag == null) return
+    val progress = viewModel.bowChargeProgress
+    ReloadRing(
+        progressFraction = progress,
+        isInPerfectZone = progress >= 1f,
+        missTapAtMs = null,
+        onTap = {},
+        modifier = modifier,
+        perfectZoneStartFraction = 1f,
+        perfectZoneEndFraction = 1f,
+    )
+}
+
+// sniperDotOffsetDegrees is recomputed ~20x/sec whenever the opponent has a sniper aimed at me
+// (see DuelViewModel.startTickers) — isolated into its own composable for the same reason as
+// [DuelReloadRing], plus animateFloatAsState here needs a composition-phase read (unlike the
+// laser beam angle above, which has no fade and can stay in the draw closure).
+@Composable
+private fun DuelSniperLaserDot(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    val offsetDegrees = viewModel.sniperDotOffsetDegrees
+    val alpha by animateFloatAsState(targetValue = if (offsetDegrees != null) 1f else 0f, label = "sniperDot")
+    if (alpha <= 0f) return
+    Canvas(modifier = modifier) {
+        val angle = offsetDegrees ?: return@Canvas
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val orbitRadiusPx = GameConstants.SNIPER_AIM_DOT_ORBIT_RADIUS_DP.dp.toPx()
+        drawCircle(
+            color = DuelIncomingDanger.copy(alpha = alpha),
+            radius = GameConstants.SNIPER_AIM_DOT_RADIUS_DP.dp.toPx(),
+            center = center + offsetFromCenter(angle, orbitRadiusPx),
+        )
+    }
 }
 
 // triggerKey-driven, same pattern as the camera shake in DuelShakeLayer below — a fresh
@@ -458,20 +601,20 @@ private fun DrawScope.drawDamageGlow(angleDegrees: Float, alpha: Float, center: 
     )
 }
 
-private fun DrawScope.drawAimLine(drag: Offset, center: Offset, maxRadiusPx: Float) {
+private fun DrawScope.drawAimLine(drag: Offset, center: Offset, maxRadiusPx: Float, alpha: Float) {
     val distance = hypot(drag.x, drag.y)
     val clamped = if (distance <= maxRadiusPx) drag else drag * (maxRadiusPx / distance)
     drawLine(
-        color = DuelAccentViolet,
+        color = DuelAccentViolet.copy(alpha = alpha),
         start = center,
         end = center + clamped,
         strokeWidth = GameConstants.AIM_LINE_STROKE_WIDTH_DP.dp.toPx(),
     )
 }
 
-private fun DrawScope.drawCharacter(rotationDegrees: Float, center: Offset, radiusPx: Float) {
+private fun DrawScope.drawCharacter(rotationDegrees: Float, center: Offset, radiusPx: Float, alpha: Float) {
     rotate(degrees = rotationDegrees, pivot = center) {
-        drawCircle(color = DuelAccentEmber, radius = radiusPx, center = center)
+        drawCircle(color = DuelAccentEmber.copy(alpha = alpha), radius = radiusPx, center = center)
     }
 }
 
@@ -538,4 +681,78 @@ private fun DrawScope.drawProjectile(
     }
 
     drawCircle(color = headColor, radius = radiusPx, center = center + direction * distancePx)
+}
+
+/** Computes [GameConstants.SHOTGUN_PELLET_TRAIL_COUNT] jitter offsets once per shot, seeded off
+ * its own fire/receive timestamp — called from `remember(shot timestamp)` in the composable
+ * body, not from the draw closure, so a fresh [Random] isn't allocated and re-rolled on every
+ * single redraw frame during a shotgun shot's flight. */
+private fun shotgunPelletJitters(seed: Long): List<Float> {
+    val random = Random(seed)
+    return List(GameConstants.SHOTGUN_PELLET_TRAIL_COUNT) {
+        (random.nextFloat() * 2f - 1f) * GameConstants.SHOTGUN_PELLET_SPREAD_DEGREES
+    }
+}
+
+/** Shotgun spread: draws one cosmetic pellet trail per entry in [jitterDegrees] (precomputed
+ * once per shot — see [shotgunPelletJitters]), each offset from [aimAngleDegrees]. Hit-testing
+ * never uses this — hit/miss stays the single widened-tolerance boolean from HitTest, decided
+ * once at fire time. */
+private fun DrawScope.drawShotgunPellets(
+    aimAngleDegrees: Float,
+    distancePx: Float,
+    center: Offset,
+    radiusPx: Float,
+    headColor: Color,
+    tailColor: Color,
+    travelPhase: Float,
+    jitterDegrees: List<Float>,
+) {
+    jitterDegrees.forEach { jitter ->
+        drawProjectile(
+            angleDegrees = aimAngleDegrees + jitter,
+            distancePx = distancePx,
+            center = center,
+            radiusPx = radiusPx * GameConstants.SHOTGUN_PELLET_SIZE_FACTOR,
+            headColor = headColor,
+            tailColor = tailColor,
+            travelPhase = travelPhase,
+        )
+    }
+}
+
+/** A falling weapon crate: a parachute canopy (arc + two riser lines) above a filled crate box,
+ * drawn at its current fall position — position math lives in CrateMath so the renderer and the
+ * ViewModel's hit-test can never disagree about where a crate visually is. */
+private fun DrawScope.drawCrate(center: Offset, sizePx: Float) {
+    val half = sizePx / 2f
+    val canopyCenter = center - Offset(0f, sizePx * 1.1f)
+    val canopyAlphaColor = DuelCrateAccent.copy(alpha = 0.7f)
+    drawArc(
+        color = canopyAlphaColor,
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(canopyCenter.x - half, canopyCenter.y - half / 2f),
+        size = Size(sizePx, sizePx),
+        style = Stroke(width = sizePx * 0.12f),
+    )
+    drawLine(
+        color = canopyAlphaColor,
+        start = canopyCenter + Offset(-half, 0f),
+        end = center + Offset(-half * 0.5f, -half * 0.5f),
+        strokeWidth = sizePx * 0.04f,
+    )
+    drawLine(
+        color = canopyAlphaColor,
+        start = canopyCenter + Offset(half, 0f),
+        end = center + Offset(half * 0.5f, -half * 0.5f),
+        strokeWidth = sizePx * 0.04f,
+    )
+    drawRoundRect(
+        color = DuelCrateAccent,
+        topLeft = center - Offset(half, half),
+        size = Size(sizePx, sizePx),
+        cornerRadius = CornerRadius(sizePx * 0.15f, sizePx * 0.15f),
+    )
 }

@@ -28,8 +28,16 @@ class GameSession @Inject constructor() {
     var isAlignedAtCalibration: Boolean = true
         private set
 
-    var isPracticeMode: Boolean = false
-        private set
+    /** Solo Test-only config, set atomically from the main menu's debug-only options — never
+     * two independently-settable fields that could be paired inconsistently. Null means "this is
+     * (or will become) a real match": [isPracticeMode]/[practiceStartingWeapon]/
+     * [cratesEnabledForDuel] all derive from this single value, so a real match can never
+     * observe a stale practice setting regardless of what a previous Solo Test session left here. */
+    private var practiceSettings: PracticeSettings? = null
+
+    val isPracticeMode: Boolean get() = practiceSettings != null
+    val practiceStartingWeapon: WeaponType get() = practiceSettings?.startingWeapon ?: WeaponType.PISTOL
+    val cratesEnabledForDuel: Boolean get() = practiceSettings?.cratesEnabled ?: true
 
     var finalOutcome: DuelOutcome = DuelOutcome.Ongoing
         private set
@@ -46,8 +54,16 @@ class GameSession @Inject constructor() {
         opponentName = name
     }
 
-    fun recordPracticeMode(practice: Boolean) {
-        isPracticeMode = practice
+    /** Called from Solo Test's entry point with the main menu's chosen options, in one atomic
+     * step — see [practiceSettings]'s doc for why this replaced two separately-mutated fields. */
+    fun enterPracticeMode(startingWeapon: WeaponType, cratesEnabled: Boolean) {
+        practiceSettings = PracticeSettings(startingWeapon, cratesEnabled)
+    }
+
+    /** Called from the real Create/Join entry points, so a Solo Test session's leftover
+     * settings can never be observed by a subsequent real match. */
+    fun exitPracticeMode() {
+        practiceSettings = null
     }
 
     fun recordCalibration(myBaseline: Float, opponentBaseline: Float, aligned: Boolean) {
@@ -68,3 +84,5 @@ class GameSession @Inject constructor() {
         finalOpponentHealth = GameConstants.MAX_PLAYER_HEALTH
     }
 }
+
+private data class PracticeSettings(val startingWeapon: WeaponType, val cratesEnabled: Boolean)

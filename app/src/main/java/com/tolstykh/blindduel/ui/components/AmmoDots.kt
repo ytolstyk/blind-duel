@@ -27,6 +27,7 @@ fun LabeledAmmoDots(
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    magazineSize: Int = GameConstants.MAGAZINE_SIZE,
 ) {
     Column(
         modifier = modifier.pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
@@ -34,6 +35,6 @@ fun LabeledAmmoDots(
     ) {
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = dotColor)
         Spacer(modifier = Modifier.height(4.dp))
-        DotsRow(filledCount = roundsRemaining, totalCount = GameConstants.MAGAZINE_SIZE, dotColor = dotColor)
+        DotsRow(filledCount = roundsRemaining, totalCount = magazineSize, dotColor = dotColor)
     }
 }

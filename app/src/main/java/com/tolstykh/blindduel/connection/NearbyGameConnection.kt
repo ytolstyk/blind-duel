@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -138,12 +140,21 @@ class NearbyGameConnection @Inject constructor(
             }
     }
 
+    // Multiple independent coroutines call sendMessage concurrently now (motion broadcast,
+    // per-shot delayed sends, the laser's NonCancellable finally-block send) — the mutex
+    // guarantees each message's encode+send happens atomically as a unit, so wire order
+    // always matches the order sendMessage was actually called, not whichever caller's
+    // off-thread JSON encode happened to finish first.
+    private val sendMutex = Mutex()
+
     override suspend fun sendMessage(message: GameMessage) {
         val endpointId = opponentEndpointId ?: return
-        // MotionUpdate is broadcast every ~120ms for the whole match; keep JSON encoding
-        // (and payload decoding, symmetrically, in onPayloadReceived) off the main thread.
-        val bytes = withContext(Dispatchers.Default) { message.toBytes() }
-        client.sendPayload(endpointId, Payload.fromBytes(bytes))
+        sendMutex.withLock {
+            // MotionUpdate is broadcast every ~120ms for the whole match; keep JSON encoding
+            // (and payload decoding, symmetrically, in onPayloadReceived) off the main thread.
+            val bytes = withContext(Dispatchers.Default) { message.toBytes() }
+            client.sendPayload(endpointId, Payload.fromBytes(bytes))
+        }
     }
 
     override fun disconnect() {

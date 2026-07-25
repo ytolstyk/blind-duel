@@ -1,9 +1,12 @@
 package com.tolstykh.blindduel.game
 
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
+import kotlinx.serialization.Serializable
 
 /**
  * Pure, Android-free rules/math for BlindDuel. Kept separate from any sensor or
@@ -22,6 +25,12 @@ object AngleMath {
 
     /** Minimal angular distance between two angles, in [0, 180]. */
     fun angularDistance(a: Float, b: Float): Float = abs(normalizeSigned(a - b))
+
+    /** Signed angular delta from [from] to [to], normalized to (-180, 180] — positive means
+     * [to] is clockwise of [from]. `abs(signedDelta(a, b)) == angularDistance(a, b)` always
+     * holds; this is the missing signed sibling needed to broadcast a directional value
+     * (e.g. the sniper's live aim heading) rather than just a magnitude. */
+    fun signedDelta(from: Float, to: Float): Float = normalizeSigned(to - from)
 }
 
 /**
@@ -67,6 +76,30 @@ object BearingModel {
         val bearingAbsoluteDegrees =
             Math.toDegrees(atan2(relative.x.toDouble(), relative.y.toDouble())).toFloat()
         return AngleMath.normalizeSigned(bearingAbsoluteDegrees - myCurrentHeadingDegrees)
+    }
+
+    /**
+     * The sniper's live laser-dot offset, recomputed in *my own* current frame (never cached
+     * from when the MotionUpdate arrived, since my own heading keeps changing what "aimed
+     * exactly at me" means on my screen). [shooterAbsoluteAimHeadingDegrees] is the shooter's
+     * broadcast absolute (magnetic-frame) aim heading — see GameMessage.MotionUpdate's doc.
+     * [bearingToShooterScreenRelativeDegrees] is my own live [computeBearingToOpponentOnScreen]
+     * result (bearing *to* the shooter, in my screen-relative frame). Converting it back to the
+     * absolute frame (re-adding [myCurrentHeadingDegrees]) and then taking its +180 reciprocal
+     * (the shooter must aim at the *reverse* of the bearing I see them at, not the same bearing)
+     * are both necessary — dropping either produces a systematic, hardware-noise-proof wrong
+     * answer, which is exactly what SniperTelemetryTest in DuelEngineTest.kt exists to catch.
+     * Returns ~0 when the shooter is aimed exactly at me.
+     */
+    fun sniperDotOffsetDegrees(
+        shooterAbsoluteAimHeadingDegrees: Float,
+        bearingToShooterScreenRelativeDegrees: Float,
+        myCurrentHeadingDegrees: Float,
+    ): Float {
+        val absoluteBearingToShooter =
+            AngleMath.normalizeSigned(bearingToShooterScreenRelativeDegrees + myCurrentHeadingDegrees)
+        val reciprocalAbsoluteBearing = AngleMath.normalizeSigned(absoluteBearingToShooter + 180f)
+        return AngleMath.signedDelta(from = reciprocalAbsoluteBearing, to = shooterAbsoluteAimHeadingDegrees)
     }
 
     /** True if the two players' baseline headings roughly oppose each other, as they should
@@ -161,4 +194,122 @@ class OutcomeResolver(private val drawWindowMs: Long) {
         }
         else -> DuelOutcome.Ongoing
     }
+}
+
+/** The five weapons a player can wield. `@Serializable` (the one dependency this otherwise
+ * pure file takes outside kotlin.math) since this rides on GameMessage.FireEvent/MotionUpdate. */
+@Serializable
+enum class WeaponType { PISTOL, SHOTGUN, BOW, SNIPER, LASER }
+
+/**
+ * Every per-weapon tunable, assembled once per [WeaponType] as GameConstants.WeaponConfigs.
+ * The bow/laser-specific fields are unused (left at their default) on every other weapon.
+ */
+data class WeaponConfig(
+    val type: WeaponType,
+    // A separate field from `type.name`, deliberately: WeaponType rides the wire protocol
+    // (GameMessage.FireEvent/MotionUpdate), so its constant names are a protocol detail, not UI
+    // copy — a future rename for wire reasons shouldn't silently change what a player sees on
+    // screen, matching the existing displayName-via-explicit-mapping convention ResultScreen
+    // already uses for DuelOutcome rather than deriving text from an enum's own identifier.
+    val displayName: String,
+    val magazineSize: Int,
+    val reloadDurationMs: Long,
+    val reloadPerfectZoneStartFraction: Float,
+    val reloadPerfectZoneEndFraction: Float,
+    val reloadMissPenaltyMs: Long,
+    val hitToleranceDegrees: Float,
+    val damage: Int,
+    val isLoud: Boolean,
+    val projectileSpeedDpPerSec: Float,
+    val projectileOffscreenTravelTimeMs: Long,
+    // Meaningful only for BOW; unused (0) for other types.
+    val bowMinChargeHoldMs: Long = 0L,
+    val bowMinSpeedDpPerSec: Float = 0f,
+    val bowMaxSpeedDpPerSec: Float = 0f,
+    // Meaningful only for LASER; unused (0) for other types.
+    val laserBeamDurationMs: Long = 0L,
+    val laserSampleIntervalMs: Long = 0L,
+)
+
+/** Hunting bow charge/pull math: how long you must hold before firing is allowed, and how
+ * far you pull back maps to projectile speed. */
+object BowMath {
+    fun pullFraction(dragDistance: Float, maxDragRadius: Float): Float =
+        (dragDistance / maxDragRadius).coerceIn(0f, 1f)
+
+    fun speedDpPerSec(pullFraction: Float, minSpeedDpPerSec: Float, maxSpeedDpPerSec: Float): Float =
+        minSpeedDpPerSec + (maxSpeedDpPerSec - minSpeedDpPerSec) * pullFraction.coerceIn(0f, 1f)
+
+    fun isFullyCharged(chargeStartedAtMs: Long, nowMs: Long, minChargeHoldMs: Long): Boolean =
+        (nowMs - chargeStartedAtMs) >= minChargeHoldMs
+}
+
+/** Tracks whether a continuous laser sweep has registered a hit — sticky (never resets to
+ * false once true), so a single beam activation scores at most one hit no matter how many
+ * samples land within tolerance or in what order. */
+class LaserBeamHitAccumulator {
+    var registeredHit: Boolean = false
+        private set
+
+    fun sample(aimAngleDegrees: Float, bearingDegrees: Float, toleranceDegrees: Float) {
+        if (!registeredHit) {
+            registeredHit = HitTest.testHit(aimAngleDegrees, bearingDegrees, toleranceDegrees)
+        }
+    }
+}
+
+/** A single falling weapon crate — capped at one active at a time (see DuelViewModel). */
+data class FallingCrate(
+    val id: Long,
+    val weaponType: WeaponType,
+    val spawnedAtMs: Long,
+    val laneXDp: Float,
+    val fallDurationMs: Long,
+)
+
+/** Pure fall/wobble math for a [FallingCrate] — the single formula both the renderer and the
+ * ViewModel's hit-test use, so they can never disagree about where a crate visually is. */
+object CrateMath {
+    fun fallProgress(spawnedAtMs: Long, nowMs: Long, fallDurationMs: Long): Float =
+        ((nowMs - spawnedAtMs).toFloat() / fallDurationMs).coerceIn(0f, 1f)
+
+    fun hasLanded(progress: Float): Boolean = progress >= 1f
+
+    /** Current offset from screen center, in dp — y interpolates top to bottom over the fall,
+     * x wobbles sinusoidally around [laneXDp] like a parachute swaying side to side. */
+    fun currentOffsetDp(
+        progress: Float,
+        laneXDp: Float,
+        topYDp: Float,
+        bottomYDp: Float,
+        wobbleAmplitudeDp: Float,
+        wobbleFrequency: Float,
+    ): Vector2 {
+        val y = topYDp + (bottomYDp - topYDp) * progress
+        val x = laneXDp + wobbleAmplitudeDp * sin(progress * wobbleFrequency * 2f * PI.toFloat())
+        return Vector2(x, y)
+    }
+
+    /**
+     * True if [aimPointDp] (the actual release point, in the same unit space as [crateOffsetDp])
+     * lands within [hitRadiusDp] of the crate's actual current position. A direct two-point
+     * Euclidean check, deliberately not reusing the angle-only tolerance model [HitTest] uses for
+     * the blind, never-rendered opponent: a crate is visible and at a known position, so its hit
+     * region must be a truly fixed-size area around where it actually is.
+     *
+     * **Must take the real aim point, not just an angle projected onto the crate's own radial
+     * distance** — an earlier version of this function reconstructed "the point where the aim
+     * angle would land" by projecting it onto `hypot(crateOffsetDp.x, crateOffsetDp.y)` (the
+     * crate's own distance from center), which reduces algebraically to a chord-length formula
+     * and is *still* an angle-only test in disguise: it couples the effective tolerance to the
+     * crate's radial distance exactly the way this function's contract promises not to (crates
+     * near the screen center become trivially easy — even auto-hit below roughly
+     * `hitRadiusDp / 2` — while ones near the top/bottom of the fall arc become harder to hit
+     * than the sniper's own tolerance). Found and fixed during review; see `CrateMathTest`'s
+     * `isHit` case, which specifically asserts the hit boundary is independent of distance from
+     * center.
+     */
+    fun isHit(aimPointDp: Vector2, crateOffsetDp: Vector2, hitRadiusDp: Float): Boolean =
+        hypot(aimPointDp.x - crateOffsetDp.x, aimPointDp.y - crateOffsetDp.y) <= hitRadiusDp
 }

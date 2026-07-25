@@ -159,4 +159,184 @@ object GameConstants {
     // Connection
     const val SESSION_CODE_LENGTH = 6
     const val NEARBY_SERVICE_ID = "com.tolstykh.blindduel.SERVICE"
+
+    // Shotgun — wide spread (modeled purely as a widened hit tolerance, hit/miss stays
+    // binary), slow projectile, loud. Pellet trail constants are cosmetic only, never
+    // consulted by hit-testing.
+    const val SHOTGUN_MAGAZINE_SIZE = 3
+    const val SHOTGUN_RELOAD_DURATION_MS = RELOAD_DURATION_MS
+    const val SHOTGUN_HIT_ANGLE_TOLERANCE_DEGREES = 40f
+    const val SHOTGUN_PROJECTILE_SPEED_DP_PER_SEC = 700f
+    const val SHOTGUN_PELLET_TRAIL_COUNT = 5
+    const val SHOTGUN_PELLET_SPREAD_DEGREES = 12f
+    const val SHOTGUN_PELLET_SIZE_FACTOR = 0.6f
+
+    // Hunting bow — a hold/charge before firing, silent, speed scales with pull distance
+    // (see BowMath). Reusing the pistol's reload/tolerance numbers; only magazine size,
+    // charge, and speed differ.
+    const val BOW_MAGAZINE_SIZE = 4
+    const val BOW_RELOAD_DURATION_MS = RELOAD_DURATION_MS
+    const val BOW_HIT_ANGLE_TOLERANCE_DEGREES = HIT_ANGLE_TOLERANCE_DEGREES
+    const val BOW_MIN_CHARGE_HOLD_MS = 600L
+    const val BOW_MIN_SPEED_DP_PER_SEC = 500f
+    const val BOW_MAX_SPEED_DP_PER_SEC = 1800f
+
+    // Sniper rifle — precise (narrow tolerance), fast, loud, and the only weapon that
+    // broadcasts a live aim-heading telemetry field while being aimed (see MotionUpdate).
+    const val SNIPER_MAGAZINE_SIZE = 2
+    const val SNIPER_RELOAD_DURATION_MS = RELOAD_DURATION_MS
+    const val SNIPER_HIT_ANGLE_TOLERANCE_DEGREES = 8f
+    const val SNIPER_PROJECTILE_SPEED_DP_PER_SEC = 1800f
+    // Named SNIPER_AIM_DOT_* (not SNIPER_LASER_DOT_*) to avoid colliding with the unrelated
+    // WeaponType.LASER's own LASER_* constant group just below.
+    const val SNIPER_AIM_DOT_ORBIT_RADIUS_DP = 48f
+    const val SNIPER_AIM_DOT_RADIUS_DP = 5f
+
+    // Laser — a single continuous 1s sweep, silent, one charge. LASER_RELOAD_DURATION_MS's
+    // clock starts only once the beam concludes (never at touch-down), so it never needs to
+    // stay in any particular numeric relationship with LASER_BEAM_DURATION_MS.
+    const val LASER_MAGAZINE_SIZE = 1
+    const val LASER_RELOAD_DURATION_MS = 1200L
+    const val LASER_HIT_ANGLE_TOLERANCE_DEGREES = HIT_ANGLE_TOLERANCE_DEGREES
+    const val LASER_BEAM_DURATION_MS = 1000L
+    const val LASER_BEAM_SAMPLE_INTERVAL_MS = 50L
+    // The receiver's incoming-hit visual for a beam weapon — deliberately much shorter than
+    // the point-projectile weapons' travel time, since a beam has no real "flight time".
+    const val LASER_INCOMING_TRAVEL_DURATION_MS = 150L
+
+    // Weapon crates — fall independently on each device (no network sync), capped to one
+    // active at a time. Hit-tested by CrateMath.isHit as a direct Euclidean distance around
+    // the crate's actual position (not an angular tolerance — a crate is visible, unlike the
+    // blind opponent, so its hit region should be a fixed-size area, not an angular cone whose
+    // absolute width would otherwise scale with the crate's current distance from center).
+    // Top/bottom Y are logical dp values (not tied to any real device's screen height), the
+    // same "arbitrary but comfortably large, and shared [by renderer and hit-test]" convention
+    // already used by PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP.
+    const val CRATE_SPAWN_MIN_INTERVAL_MS = 8_000L
+    const val CRATE_SPAWN_MAX_INTERVAL_MS = 15_000L
+    const val CRATE_FALL_DURATION_MS = 3_000L
+    const val CRATE_HIT_RADIUS_DP = 80f
+    const val CRATE_SPAWN_TOP_Y_DP = -600f
+    const val CRATE_LAND_BOTTOM_Y_DP = 600f
+    const val CRATE_SIZE_DP = 40f
+    const val CRATE_WOBBLE_AMPLITUDE_DP = 24f
+    const val CRATE_WOBBLE_FREQUENCY = 2.2f
+    const val CRATE_LANE_MARGIN_DP = 60f
+
+    // A raw numeric field on FireEvent (bow's per-shot travel duration) must be clamped on
+    // receipt like every other peer-supplied number — comfortably above the slowest
+    // configured weapon's real duration.
+    const val MAX_PROJECTILE_TRAVEL_DURATION_MS = 5_000L
+
+    // Cosmetic-only DuelScreen rendering ratios — not gameplay-affecting, but kept here
+    // (rather than as private constants in DuelScreen.kt) for consistency with every other
+    // "purely cosmetic but still a shared tunable" constant in this file, e.g. SHOTGUN_PELLET_*.
+    const val OUT_OF_AMMO_AIM_ALPHA = 0.35f
+    const val LASER_BEAM_WIDTH_MULTIPLIER = 2.5f
+
+    /** Assembles the flat per-weapon constants above into one [WeaponConfig] per [WeaponType]. */
+    object WeaponConfigs {
+        val PISTOL = WeaponConfig(
+            type = WeaponType.PISTOL,
+            displayName = "Pistol",
+            magazineSize = MAGAZINE_SIZE,
+            reloadDurationMs = RELOAD_DURATION_MS,
+            reloadPerfectZoneStartFraction = RELOAD_PERFECT_ZONE_START_FRACTION,
+            reloadPerfectZoneEndFraction = RELOAD_PERFECT_ZONE_END_FRACTION,
+            reloadMissPenaltyMs = RELOAD_MISS_PENALTY_MS,
+            hitToleranceDegrees = HIT_ANGLE_TOLERANCE_DEGREES,
+            damage = HIT_DAMAGE,
+            isLoud = true,
+            projectileSpeedDpPerSec = PROJECTILE_SPEED_DP_PER_SEC,
+            projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+        )
+        val SHOTGUN = WeaponConfig(
+            type = WeaponType.SHOTGUN,
+            displayName = "Shotgun",
+            magazineSize = SHOTGUN_MAGAZINE_SIZE,
+            reloadDurationMs = SHOTGUN_RELOAD_DURATION_MS,
+            reloadPerfectZoneStartFraction = RELOAD_PERFECT_ZONE_START_FRACTION,
+            reloadPerfectZoneEndFraction = RELOAD_PERFECT_ZONE_END_FRACTION,
+            reloadMissPenaltyMs = RELOAD_MISS_PENALTY_MS,
+            hitToleranceDegrees = SHOTGUN_HIT_ANGLE_TOLERANCE_DEGREES,
+            damage = HIT_DAMAGE,
+            isLoud = true,
+            projectileSpeedDpPerSec = SHOTGUN_PROJECTILE_SPEED_DP_PER_SEC,
+            projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+        )
+        val BOW = WeaponConfig(
+            type = WeaponType.BOW,
+            displayName = "Hunting Bow",
+            magazineSize = BOW_MAGAZINE_SIZE,
+            reloadDurationMs = BOW_RELOAD_DURATION_MS,
+            reloadPerfectZoneStartFraction = RELOAD_PERFECT_ZONE_START_FRACTION,
+            reloadPerfectZoneEndFraction = RELOAD_PERFECT_ZONE_END_FRACTION,
+            reloadMissPenaltyMs = RELOAD_MISS_PENALTY_MS,
+            hitToleranceDegrees = BOW_HIT_ANGLE_TOLERANCE_DEGREES,
+            damage = HIT_DAMAGE,
+            isLoud = false,
+            // Genuinely unused for the bow — DuelViewModel.fireBow derives both its visual
+            // travel duration and its network send delay directly from the per-shot speed
+            // (bowMinSpeedDpPerSec..bowMaxSpeedDpPerSec), never reading these two fields. Left
+            // at 0 (not a plausible-looking fallback value) so an unused read is obviously wrong
+            // rather than silently working with a misleading number.
+            projectileSpeedDpPerSec = 0f,
+            projectileOffscreenTravelTimeMs = 0L,
+            bowMinChargeHoldMs = BOW_MIN_CHARGE_HOLD_MS,
+            bowMinSpeedDpPerSec = BOW_MIN_SPEED_DP_PER_SEC,
+            bowMaxSpeedDpPerSec = BOW_MAX_SPEED_DP_PER_SEC,
+        )
+        val SNIPER = WeaponConfig(
+            type = WeaponType.SNIPER,
+            displayName = "Sniper Rifle",
+            magazineSize = SNIPER_MAGAZINE_SIZE,
+            reloadDurationMs = SNIPER_RELOAD_DURATION_MS,
+            reloadPerfectZoneStartFraction = RELOAD_PERFECT_ZONE_START_FRACTION,
+            reloadPerfectZoneEndFraction = RELOAD_PERFECT_ZONE_END_FRACTION,
+            reloadMissPenaltyMs = RELOAD_MISS_PENALTY_MS,
+            hitToleranceDegrees = SNIPER_HIT_ANGLE_TOLERANCE_DEGREES,
+            damage = HIT_DAMAGE,
+            isLoud = true,
+            projectileSpeedDpPerSec = SNIPER_PROJECTILE_SPEED_DP_PER_SEC,
+            projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+        )
+        val LASER = WeaponConfig(
+            type = WeaponType.LASER,
+            displayName = "Laser",
+            magazineSize = LASER_MAGAZINE_SIZE,
+            reloadDurationMs = LASER_RELOAD_DURATION_MS,
+            reloadPerfectZoneStartFraction = RELOAD_PERFECT_ZONE_START_FRACTION,
+            reloadPerfectZoneEndFraction = RELOAD_PERFECT_ZONE_END_FRACTION,
+            reloadMissPenaltyMs = RELOAD_MISS_PENALTY_MS,
+            hitToleranceDegrees = LASER_HIT_ANGLE_TOLERANCE_DEGREES,
+            damage = HIT_DAMAGE,
+            isLoud = false,
+            projectileSpeedDpPerSec = PROJECTILE_SPEED_DP_PER_SEC,
+            projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+            laserBeamDurationMs = LASER_BEAM_DURATION_MS,
+            laserSampleIntervalMs = LASER_BEAM_SAMPLE_INTERVAL_MS,
+        )
+
+        fun forType(type: WeaponType): WeaponConfig = when (type) {
+            WeaponType.PISTOL -> PISTOL
+            WeaponType.SHOTGUN -> SHOTGUN
+            WeaponType.BOW -> BOW
+            WeaponType.SNIPER -> SNIPER
+            WeaponType.LASER -> LASER
+        }
+
+        init {
+            // FireEvent.weaponType is peer-supplied and trusted as a damage-lookup key (never a
+            // raw damage number) specifically because every weapon deals identical damage today —
+            // this is only safe under that assumption. If a future tuning pass ever differentiates
+            // per-weapon damage, a modified client could claim the highest-damage weapon on every
+            // shot regardless of its real loadout, silently reopening the exact unbounded-damage
+            // cheat vector this project's anti-cheat model already fixed once (see CLAUDE.md).
+            // Fails loudly instead: differentiating damage requires first revisiting
+            // DuelViewModel.onFireReceived's trust model, not just editing a constant here.
+            check(listOf(PISTOL, SHOTGUN, BOW, SNIPER, LASER).all { it.damage == HIT_DAMAGE }) {
+                "Per-weapon damage has diverged from HIT_DAMAGE — see the comment above this check."
+            }
+        }
+    }
 }

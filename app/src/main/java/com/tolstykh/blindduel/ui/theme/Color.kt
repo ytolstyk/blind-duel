@@ -14,6 +14,10 @@ val DuelIncomingDangerDim = Color(0xFF5C1C1C)
 
 val DuelReloadPerfectZone = Color(0xFFFFC94D)
 
+// Multi-weapon system: the laser's live sweeping beam, and the crate/pickup accent color.
+val DuelLaserBeam = Color(0xFFFF3366)
+val DuelCrateAccent = Color(0xFFFFD54F)
+
 val DuelBackgroundDark = Color(0xFF0F1226)
 val DuelSurfaceDark = Color(0xFF171B34)
 val DuelOnBackgroundDark = Color(0xFFEDEBFF)

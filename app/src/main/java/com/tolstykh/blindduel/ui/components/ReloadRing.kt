@@ -48,6 +48,8 @@ fun ReloadRing(
     missTapAtMs: Long?,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
+    perfectZoneStartFraction: Float = GameConstants.RELOAD_PERFECT_ZONE_START_FRACTION,
+    perfectZoneEndFraction: Float = GameConstants.RELOAD_PERFECT_ZONE_END_FRACTION,
 ) {
     val trackColor = MaterialTheme.colorScheme.surface
     val dialColor = MaterialTheme.colorScheme.primary
@@ -92,10 +94,10 @@ fun ReloadRing(
             style = Stroke(width = strokeWidthPx),
         )
 
-        // Perfect-zone band, from RELOAD_PERFECT_ZONE_START_FRACTION to _END_FRACTION of the circle.
-        val zoneStartDegrees = GameConstants.RELOAD_PERFECT_ZONE_START_FRACTION * FULL_CIRCLE_DEGREES
-        val zoneSweepDegrees =
-            (GameConstants.RELOAD_PERFECT_ZONE_END_FRACTION - GameConstants.RELOAD_PERFECT_ZONE_START_FRACTION) * FULL_CIRCLE_DEGREES
+        // Perfect-zone band, from perfectZoneStartFraction to perfectZoneEndFraction of the circle
+        // (the currently-equipped weapon's own reload config, defaulted to the pistol's).
+        val zoneStartDegrees = perfectZoneStartFraction * FULL_CIRCLE_DEGREES
+        val zoneSweepDegrees = (perfectZoneEndFraction - perfectZoneStartFraction) * FULL_CIRCLE_DEGREES
         drawArc(
             color = DuelReloadPerfectZone,
             startAngle = ARC_START_DEGREES + zoneStartDegrees,

@@ -5,20 +5,26 @@ import android.net.Uri
 import android.provider.Settings as SystemSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +38,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tolstykh.blindduel.BuildConfig
+import com.tolstykh.blindduel.game.GameConstants.WeaponConfigs
+import com.tolstykh.blindduel.game.WeaponType
 import com.tolstykh.blindduel.permission.GamePermissions
 
 private enum class PendingAction { Create, Join }
@@ -130,14 +138,72 @@ fun MainMenuScreen(
             }
 
             if (BuildConfig.DEBUG) {
-                TextButton(
-                    onClick = {
+                SoloTestOptions(
+                    viewModel = viewModel,
+                    onStartSoloTest = {
                         viewModel.startSoloTest()
                         onNavigateToSoloTest()
                     },
                     modifier = Modifier.padding(top = 24.dp),
-                ) { Text("Solo Test (Debug)") }
+                )
             }
+        }
+    }
+}
+
+/** Debug-only pre-game options for Solo Test Mode: pick a starting weapon (so any weapon can be
+ * tested without waiting on a random crate drop) and toggle crate drops on/off, so a practice
+ * session can be tuned to test a specific thing while still defaulting to look like a real match. */
+@Composable
+private fun SoloTestOptions(
+    viewModel: MainMenuViewModel,
+    onStartSoloTest: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        Text(
+            text = "Solo Test Options",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        Text(
+            text = "Starting weapon",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WeaponType.entries.forEach { weapon ->
+                FilterChip(
+                    selected = viewModel.soloTestWeapon == weapon,
+                    onClick = { viewModel.onSoloTestWeaponChanged(weapon) },
+                    label = { Text(WeaponConfigs.forType(weapon).displayName) },
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Weapon crates", style = MaterialTheme.typography.bodyMedium)
+            Switch(
+                checked = viewModel.soloTestCratesEnabled,
+                onCheckedChange = viewModel::onSoloTestCratesEnabledChanged,
+            )
+        }
+
+        TextButton(onClick = onStartSoloTest, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Solo Test (Debug)")
         }
     }
 }
