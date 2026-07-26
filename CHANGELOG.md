@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- Match length: a new host-only "Match length" picker on the main menu (Quick Duel / Standard / Marathon, 2/3/5 hits to win) applied when creating a duel. The joiner automatically adopts the host's choice — there is no separate joiner-side picker, and Solo Test Mode always plays at the standard 3 hits regardless of the picker's current selection.
+- Match length: a new host-only "Match length" picker on the Create screen (Quick Duel / Standard / Marathon, 2/3/5 hits to win) applied when creating a duel. The joiner automatically adopts the host's choice — there is no separate joiner-side picker, and Solo Test Mode always plays at the standard 3 hits regardless of the picker's current selection.
 - Dodge: a new HUD button (bottom-left of the Duel screen) that briefly narrows the opponent's effective hit tolerance against you when tapped, on a cooldown. Rewards ducking/juking out of the way of an incoming shot rather than standing still.
 - Fog-of-war confidence decay: the longer you go without taking a physical step, the more forgiving your own aim's hit tolerance becomes — an intentional mechanic formalizing the existing "your sensor estimate gets worse over time" jankiness. Not shown in the UI.
 - "Leave Practice" button on the Duel screen while in Solo Test Mode, so a practice session can be exited without playing it out.
@@ -23,6 +23,9 @@
 - Destroying a weapon crate now requires actually shooting it: firing a shot whose aim ray passes near the crate spends a round and, once the projectile reaches it, blows it up (screen shake, particle burst, color flash) before granting the new weapon — replacing the old "release your drag near the crate" free-grab.
 - Each weapon's aim line now previews its actual firing behavior instead of a plain line for every weapon: shotgun shows a widening cone, sniper shows a target reticle at the tip, bow shows an arrowhead, and laser (which fires immediately on touch) shows only its full sweeping beam.
 - Taking a hit now sprays a directional burst of debris particles off the side of the character facing the incoming shot, and the incoming projectile now visibly shrinks/fades into the character as it arrives instead of just popping on contact.
+
+### Changed
+- Moved the match-length picker and the debug-only Solo Test entry point (starting weapon, crate toggle) off the main menu and onto the Create screen, so the main menu stays to just name entry and Create/Join.
 
 ### Fixed
 - Solo Test Mode (practice) never tracked the practice dummy's health, so landing hits never ended the duel or showed the win screen. `LoopbackGameConnection` now applies damage to a simulated opponent and echoes back `HealthUpdate`s, so 3 hits now resolves a win exactly like a real duel.

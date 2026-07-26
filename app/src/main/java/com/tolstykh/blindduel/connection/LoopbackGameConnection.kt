@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -64,6 +65,11 @@ class LoopbackGameConnection @Inject constructor(
         scope.launch {
             delay(CONNECT_SIMULATION_DELAY_MS)
             _connectionState.value = ConnectionState.Connected("loopback-opponent")
+            // _incomingMessages has no replay, so emitting before Calibration's screen/ViewModel
+            // has actually subscribed (Compose navigation + hiltViewModel() construction racing
+            // this fixed delay) would silently drop the opening handshake and hang Calibration
+            // forever on "waiting for opponent" — wait for a real subscriber first.
+            _incomingMessages.subscriptionCount.first { it > 0 }
             _incomingMessages.tryEmit(GameMessage.Hello("Practice Dummy"))
             _incomingMessages.tryEmit(GameMessage.ReadyForDuel)
         }

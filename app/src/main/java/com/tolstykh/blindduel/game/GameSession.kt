@@ -28,7 +28,7 @@ class GameSession @Inject constructor() {
     var isAlignedAtCalibration: Boolean = true
         private set
 
-    /** Solo Test-only config, set atomically from the main menu's debug-only options — never
+    /** Solo Test-only config, set atomically from the Create screen's debug-only options — never
      * two independently-settable fields that could be paired inconsistently. Null means "this is
      * (or will become) a real match": [isPracticeMode]/[practiceStartingWeapon]/
      * [cratesEnabledForDuel] all derive from this single value, so a real match can never
@@ -39,7 +39,7 @@ class GameSession @Inject constructor() {
     val practiceStartingWeapon: WeaponType get() = practiceSettings?.startingWeapon ?: WeaponType.PISTOL
     val cratesEnabledForDuel: Boolean get() = practiceSettings?.cratesEnabled ?: true
 
-    /** The match's max health — host-chosen (see MainMenuScreen's match-length picker),
+    /** The match's max health — host-chosen (see CreateScreen's match-length picker),
      * adopted by the joiner via GameMessage.Hello.maxHealth. Not reset by [resetForNewDuel]
      * (a rematch keeps the host's original pick), but is reset by [enterPracticeMode] so a
      * previously-chosen real-match value can never leak into a later Solo Test session. */
@@ -61,7 +61,7 @@ class GameSession @Inject constructor() {
         opponentName = name
     }
 
-    /** Called from Solo Test's entry point with the main menu's chosen options, in one atomic
+    /** Called from Solo Test's entry point with the Create screen's chosen options, in one atomic
      * step — see [practiceSettings]'s doc for why this replaced two separately-mutated fields.
      * Also resets [matchMaxHealth] to the constant default: a real match's chosen match length
      * lives outside [practiceSettings] (it's meaningful to Solo Test too, via

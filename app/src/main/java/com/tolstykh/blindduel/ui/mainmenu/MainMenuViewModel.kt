@@ -9,8 +9,6 @@ import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.data.AppPreferencesRepository
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.GameSession
-import com.tolstykh.blindduel.game.MatchLength
-import com.tolstykh.blindduel.game.WeaponType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,19 +24,6 @@ class MainMenuViewModel @Inject constructor(
     private val appPrefs: AppPreferencesRepository,
 ) : ViewModel() {
     var playerName by mutableStateOf("")
-        private set
-
-    /** Host-only pre-duel choice (see MainMenuScreen's non-debug match-length picker) — the
-     * joiner always adopts whatever the host picked, via GameMessage.Hello, so this state is
-     * meaningless/unused on the Join path. Not persisted, reset each process start. */
-    var selectedMatchLength by mutableStateOf(MatchLength.STANDARD)
-        private set
-
-    /** Solo Test-only options, shown in the debug-gated section of the main menu. Not
-     * persisted — these are testing conveniences, reset each process start, unlike [playerName]. */
-    var soloTestWeapon by mutableStateOf(WeaponType.PISTOL)
-        private set
-    var soloTestCratesEnabled by mutableStateOf(true)
         private set
 
     private var saveNameJob: Job? = null
@@ -67,7 +52,6 @@ class MainMenuViewModel @Inject constructor(
     fun prepareToHost() {
         commitPlayerName()
         gameSession.exitPracticeMode()
-        gameSession.recordMatchMaxHealth(selectedMatchLength.maxHealth)
         activeGameConnection.selectNearby()
     }
 
@@ -82,31 +66,7 @@ class MainMenuViewModel @Inject constructor(
         activeGameConnection.selectNearby()
     }
 
-    fun onMatchLengthSelected(length: MatchLength) {
-        selectedMatchLength = length
-    }
-
-    fun onSoloTestWeaponChanged(weapon: WeaponType) {
-        soloTestWeapon = weapon
-    }
-
-    fun onSoloTestCratesEnabledChanged(enabled: Boolean) {
-        soloTestCratesEnabled = enabled
-    }
-
-    fun startSoloTest() {
-        commitPlayerName()
-        gameSession.recordOpponentName(PRACTICE_DUMMY_NAME)
-        gameSession.enterPracticeMode(startingWeapon = soloTestWeapon, cratesEnabled = soloTestCratesEnabled)
-        activeGameConnection.selectLoopback()
-        // Solo Test Mode skips Create/Join (the screens that normally call startHosting/
-        // startJoining), so kick off the loopback "connection" directly here.
-        viewModelScope.launch { activeGameConnection.current.startHosting(SOLO_TEST_SESSION_CODE) }
-    }
-
     private companion object {
-        const val SOLO_TEST_SESSION_CODE = "SOLO"
-        const val PRACTICE_DUMMY_NAME = "Practice Dummy"
         const val NAME_SAVE_DEBOUNCE_MS = 500L
     }
 }

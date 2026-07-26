@@ -179,7 +179,7 @@ class DuelViewModel @Inject constructor(
     private val weaponSoundPlayer: WeaponSoundPlayer,
 ) : ViewModel() {
 
-    // Solo Test Mode lets the player pick a starting weapon from the main menu so any weapon can
+    // Solo Test Mode lets the player pick a starting weapon from the Create screen so any weapon can
     // be tested without waiting on a crate; GameSession.practiceStartingWeapon already defaults
     // to PISTOL outside practice mode, so a real match always starts on the pistol for free.
     private val startingWeapon = gameSession.practiceStartingWeapon
@@ -390,7 +390,7 @@ class DuelViewModel @Inject constructor(
 
         startMotionBroadcastLoop()
         startTickers()
-        // Always on in a real match; in Solo Test Mode, gated by the main menu's "Weapon
+        // Always on in a real match; in Solo Test Mode, gated by the Create screen's "Weapon
         // crates" toggle so a practice session can be tested without crate interruptions.
         if (gameSession.cratesEnabledForDuel) startCrateSpawnLoop()
     }

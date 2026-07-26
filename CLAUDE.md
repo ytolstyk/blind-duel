@@ -32,8 +32,8 @@ The full design rationale (calibration handshake, dead-reckoning bearing model, 
 
 Type-safe Compose Navigation (`navigation/Navigation.kt`) with private `@Serializable object` routes:
 
-- `MainMenu` → `MainMenuScreen` — name entry, Create / Join buttons, debug-only "Solo Test" entry (`BuildConfig.DEBUG` gated)
-- `Create` → `CreateScreen` — generates a 6-char session code, renders a ZXing-generated QR bitmap, advertises via Nearby Connections, waits for a peer
+- `MainMenu` → `MainMenuScreen` — name entry, Create / Join buttons only; no gameplay options live here
+- `Create` → `CreateScreen` — host-only match-length picker, generates a 6-char session code, renders a ZXing-generated QR bitmap, advertises via Nearby Connections, waits for a peer; also hosts the debug-only "Solo Test" entry (`BuildConfig.DEBUG` gated) and its weapon/crates options, which abandon the real Nearby hosting in favor of the loopback opponent
 - `Join` → `JoinScreen` — CameraX preview + ML Kit barcode scanner; decodes the QR, discovers the matching advertised endpoint, connects
 - `Calibration` → `CalibrationScreen` — mutual-ready handshake, then each device runs its own local 3-2-1 "face your opponent" countdown, captures its compass baseline heading, and exchanges it with the peer
 - `Duel` → `DuelScreen` — drag-to-aim / release-to-fire, magazine/reload, health, projectile animation, ambient particles
@@ -121,8 +121,8 @@ API-level-conditional required-permission lists (Nearby/Bluetooth, camera, `ACTI
 | `sensor/MotionProvider.kt` | Compass heading + step-detector flows |
 | `sensor/Haptics.kt` | Hit vibration feedback |
 | `permission/GamePermissions.kt` | Required/hard-required permission lists |
-| `ui/mainmenu/MainMenuScreen.kt` + `ViewModel` | Name entry, Create/Join/Solo Test |
-| `ui/create/CreateScreen.kt` + `ViewModel` | QR generation + advertising |
+| `ui/mainmenu/MainMenuScreen.kt` + `ViewModel` | Name entry, Create/Join |
+| `ui/create/CreateScreen.kt` + `ViewModel` | Match-length picker, QR generation + advertising, debug-only Solo Test options |
 | `ui/join/JoinScreen.kt` + `ViewModel` | CameraX/ML Kit QR scanning + discovery |
 | `ui/calibration/CalibrationScreen.kt` + `ViewModel` | Ready handshake, countdown, baseline exchange (sealed `CalibrationPhase` state machine) |
 | `ui/duel/DuelScreen.kt` + `ViewModel` | Aim/fire/magazine/reload/health/projectile animation |

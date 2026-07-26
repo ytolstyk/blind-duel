@@ -38,9 +38,6 @@ fun Navigation(
             MainMenuScreen(
                 onNavigateToCreate = { navController.navigate(Create) },
                 onNavigateToJoin = { navController.navigate(Join) },
-                onNavigateToSoloTest = {
-                    navController.navigate(Calibration) { popUpTo<MainMenu>() }
-                },
                 onNavigateToSettings = { navController.navigate(Settings) },
             )
         }
@@ -50,6 +47,9 @@ fun Navigation(
         composable<Create> {
             CreateScreen(
                 onConnected = { navController.navigate(Calibration) { popUpTo<MainMenu>() } },
+                onNavigateToSoloTest = {
+                    navController.navigate(Calibration) { popUpTo<MainMenu>() }
+                },
             )
         }
         composable<Join> {

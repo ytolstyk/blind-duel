@@ -59,6 +59,16 @@ class NearbyGameConnection @Inject constructor(
      * any nearby device discovering the fixed [GameConstants.NEARBY_SERVICE_ID]. */
     private var advertisedSessionCode: String? = null
 
+    /** Tracked explicitly (rather than inferring "not hosting" from [advertisedSessionCode] being
+     * null) so [onConnectionInitiated] fails closed the instant [disconnect] is called, without
+     * waiting on the async, fire-and-forget [ConnectionsClient.stopAdvertising] to actually take
+     * effect. Solo Test Mode's entry point disconnects this real transport out from under a
+     * still-live advertisement (see CreateViewModel.startSoloTest) — without this, that teardown
+     * window would briefly auto-accept any nearby device's connection request. */
+    private var role: Role = Role.IDLE
+
+    private enum class Role { IDLE, HOSTING, JOINING }
+
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             val bytes = payload.asBytes() ?: return
@@ -74,15 +84,20 @@ class NearbyGameConnection @Inject constructor(
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            val expectedCode = advertisedSessionCode
-            if (expectedCode != null) {
-                val incomingCode = info.endpointName.substringBefore(SESSION_CODE_DELIMITER, "")
-                if (incomingCode != expectedCode) {
-                    client.rejectConnection(endpointId)
-                    return
+            when (role) {
+                Role.IDLE -> client.rejectConnection(endpointId)
+                // The joiner never sets advertisedSessionCode — it's already the side that
+                // supplied the code, via startJoining's echoed endpoint name.
+                Role.JOINING -> client.acceptConnection(endpointId, payloadCallback)
+                Role.HOSTING -> {
+                    val incomingCode = info.endpointName.substringBefore(SESSION_CODE_DELIMITER, "")
+                    if (incomingCode == advertisedSessionCode) {
+                        client.acceptConnection(endpointId, payloadCallback)
+                    } else {
+                        client.rejectConnection(endpointId)
+                    }
                 }
             }
-            client.acceptConnection(endpointId, payloadCallback)
         }
 
         override fun onConnectionResult(endpointId: String, resolution: ConnectionResolution) {
@@ -119,6 +134,7 @@ class NearbyGameConnection @Inject constructor(
 
     override suspend fun startHosting(sessionCode: String) {
         _connectionState.value = ConnectionState.Connecting
+        role = Role.HOSTING
         advertisedSessionCode = sessionCode
         val options = AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build()
         client.startAdvertising(sessionCode, GameConstants.NEARBY_SERVICE_ID, connectionLifecycleCallback, options)
@@ -129,6 +145,7 @@ class NearbyGameConnection @Inject constructor(
 
     override suspend fun startJoining(sessionCode: String, localPlayerName: String) {
         _connectionState.value = ConnectionState.Connecting
+        role = Role.JOINING
         targetSessionCode = sessionCode
         // Echo the scanned session code back as our local endpoint name so the host can
         // verify it before accepting (see onConnectionInitiated above).
@@ -158,6 +175,9 @@ class NearbyGameConnection @Inject constructor(
     }
 
     override fun disconnect() {
+        role = Role.IDLE
+        client.stopAdvertising()
+        client.stopDiscovery()
         client.stopAllEndpoints()
         opponentEndpointId = null
         targetSessionCode = null
