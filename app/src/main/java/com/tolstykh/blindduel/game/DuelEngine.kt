@@ -292,24 +292,25 @@ object CrateMath {
     }
 
     /**
-     * True if [aimPointDp] (the actual release point, in the same unit space as [crateOffsetDp])
-     * lands within [hitRadiusDp] of the crate's actual current position. A direct two-point
-     * Euclidean check, deliberately not reusing the angle-only tolerance model [HitTest] uses for
-     * the blind, never-rendered opponent: a crate is visible and at a known position, so its hit
-     * region must be a truly fixed-size area around where it actually is.
-     *
-     * **Must take the real aim point, not just an angle projected onto the crate's own radial
-     * distance** — an earlier version of this function reconstructed "the point where the aim
-     * angle would land" by projecting it onto `hypot(crateOffsetDp.x, crateOffsetDp.y)` (the
-     * crate's own distance from center), which reduces algebraically to a chord-length formula
-     * and is *still* an angle-only test in disguise: it couples the effective tolerance to the
-     * crate's radial distance exactly the way this function's contract promises not to (crates
-     * near the screen center become trivially easy — even auto-hit below roughly
-     * `hitRadiusDp / 2` — while ones near the top/bottom of the fall arc become harder to hit
-     * than the sniper's own tolerance). Found and fixed during review; see `CrateMathTest`'s
-     * `isHit` case, which specifically asserts the hit boundary is independent of distance from
-     * center.
+     * True if firing along [aimAngleDegrees] (0°=up, clockwise — same convention as
+     * BearingModel/HitTest) sends a projectile within [hitRadiusDp] of the crate's current
+     * [crateOffsetDp]. A point-to-ray distance test, deliberately not reusing the angle-only
+     * tolerance model [HitTest] uses for the blind, never-rendered opponent: a crate is visible
+     * and at a known position, so its hit region must be a truly fixed-size area around where it
+     * actually is, not an angular cone whose absolute width would otherwise scale with the
+     * crate's current distance from center. The crate's position is projected onto the aim
+     * direction rather than compared to a single fixed point, so a crate behind the firing
+     * direction (negative projection) is never hit, even if it happens to be within [hitRadiusDp]
+     * of the ray's *infinite* extension backward.
      */
-    fun isHit(aimPointDp: Vector2, crateOffsetDp: Vector2, hitRadiusDp: Float): Boolean =
-        hypot(aimPointDp.x - crateOffsetDp.x, aimPointDp.y - crateOffsetDp.y) <= hitRadiusDp
+    fun isRayHit(aimAngleDegrees: Float, crateOffsetDp: Vector2, hitRadiusDp: Float): Boolean {
+        val rad = Math.toRadians(aimAngleDegrees.toDouble())
+        val dirX = sin(rad).toFloat()
+        val dirY = -cos(rad).toFloat()
+        val projection = crateOffsetDp.x * dirX + crateOffsetDp.y * dirY
+        if (projection < 0f) return false
+        val closestX = dirX * projection
+        val closestY = dirY * projection
+        return hypot(crateOffsetDp.x - closestX, crateOffsetDp.y - closestY) <= hitRadiusDp
+    }
 }

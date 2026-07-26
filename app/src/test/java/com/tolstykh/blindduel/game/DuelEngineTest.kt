@@ -398,33 +398,41 @@ class CrateMathTest {
     }
 
     @Test
-    fun `isHit is a direct two-point Euclidean check`() {
-        val crateOffset = Vector2(10f, -100f)
-        assertTrue(CrateMath.isHit(aimPointDp = Vector2(10f, -100f), crateOffsetDp = crateOffset, hitRadiusDp = 10f)) // exact same point
-        assertTrue(CrateMath.isHit(aimPointDp = Vector2(15f, -95f), crateOffsetDp = crateOffset, hitRadiusDp = 10f)) // within radius
-        assertFalse(CrateMath.isHit(aimPointDp = Vector2(30f, -100f), crateOffsetDp = crateOffset, hitRadiusDp = 10f)) // 20dp away, outside
+    fun `isRayHit is true when the aim angle points straight at the crate`() {
+        // 0 degrees = up, matching offsetFromCenter's convention; a crate directly "above" center
+        // is hit by an aim angle of exactly 0.
+        assertTrue(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(0f, -200f), hitRadiusDp = 50f))
+        // 90 degrees = due right/east.
+        assertTrue(CrateMath.isRayHit(aimAngleDegrees = 90f, crateOffsetDp = Vector2(200f, 0f), hitRadiusDp = 50f))
     }
 
     @Test
-    fun `isHit's boundary is independent of the crate's distance from center`() {
-        // Found during review: an earlier version of isHit reconstructed an "aim point" by
-        // projecting an angle onto the crate's own radial distance, which made the effective
-        // tolerance scale with distance (crates near center became nearly unmissable, crates near
-        // the fall's start/end became harder to hit than the sniper). This test locks in that a
-        // fixed hitRadiusDp requires the exact same absolute miss-distance regardless of how far
-        // the crate is from screen center.
+    fun `isRayHit is true when the crate is within hitRadiusDp of the ray, not just dead-on`() {
+        // Crate sits 30dp to the side of a ray fired straight up (0 degrees) at distance 200dp —
+        // within a 50dp hit radius of that ray, so still a hit despite not being exactly on it.
+        assertTrue(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(30f, -200f), hitRadiusDp = 50f))
+        // Just outside the radius is a miss.
+        assertFalse(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(60f, -200f), hitRadiusDp = 50f))
+    }
+
+    @Test
+    fun `isRayHit never hits a crate behind the firing direction`() {
+        // Crate is directly below center (200dp south); firing straight up (0 degrees) sends the
+        // ray the opposite way, so even though the crate is close to the ray's infinite backward
+        // extension, it must never register as a hit.
+        assertFalse(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(0f, 200f), hitRadiusDp = 50f))
+    }
+
+    @Test
+    fun `isRayHit's boundary is independent of the crate's distance from center`() {
+        // A crate exactly hitRadiusDp off to the side of the ray is a hit whether it's near or
+        // far along that ray — the hit boundary must not scale with the crate's distance from
+        // center (a fixed-size hit region around the crate's true position, not an angular cone).
         val hitRadiusDp = 50f
-        val nearCrate = Vector2(0f, -50f) // 50dp from center
-        val farCrate = Vector2(0f, -500f) // 500dp from center
-
-        // Exactly at the hit radius's edge (directly "below" each crate, same absolute miss
-        // distance) is a hit for both, independent of distance from center.
-        assertTrue(CrateMath.isHit(Vector2(0f, -50f + hitRadiusDp), nearCrate, hitRadiusDp))
-        assertTrue(CrateMath.isHit(Vector2(0f, -500f + hitRadiusDp), farCrate, hitRadiusDp))
-
-        // Just past the hit radius is a miss for both, again independent of distance from center.
-        assertFalse(CrateMath.isHit(Vector2(0f, -50f + hitRadiusDp + 1f), nearCrate, hitRadiusDp))
-        assertFalse(CrateMath.isHit(Vector2(0f, -500f + hitRadiusDp + 1f), farCrate, hitRadiusDp))
+        assertTrue(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(hitRadiusDp, -50f), hitRadiusDp = hitRadiusDp))
+        assertTrue(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(hitRadiusDp, -500f), hitRadiusDp = hitRadiusDp))
+        assertFalse(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(hitRadiusDp + 1f, -50f), hitRadiusDp = hitRadiusDp))
+        assertFalse(CrateMath.isRayHit(aimAngleDegrees = 0f, crateOffsetDp = Vector2(hitRadiusDp + 1f, -500f), hitRadiusDp = hitRadiusDp))
     }
 }
 

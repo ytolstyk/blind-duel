@@ -61,6 +61,9 @@ data class DuelUiState(
     // Only changes on a crate pickup or a reload completing (auto-revert to pistol) — both
     // low-frequency events, so no recomposition-isolation concern the way reloadProgress has.
     val equippedWeapon: WeaponType = WeaponType.PISTOL,
+    // Same trigger-flash pattern as damageFlash, just themed for a destroyed crate rather than
+    // a landed opponent hit — see DuelViewModel.triggerCrateExplosion.
+    val crateExplosionFlash: Boolean = false,
 ) {
     // Derived, not stored: startReload()/completeReload() always empty/refill roundsRemaining
     // in the same call that starts/ends a reload, so this can never desync from it. Flips at
@@ -70,20 +73,86 @@ data class DuelUiState(
     val equippedWeaponConfig: WeaponConfig get() = WeaponConfigs.forType(equippedWeapon)
 }
 
-/** A just-fired shot, for the shooter's own on-screen projectile animation. [wasHit] is already
- * known locally at fire time (the shooter decides hit/miss unilaterally). [travelDurationMs] is
+/**
+ * A just-fired shot, for the shooter's own on-screen projectile animation. [travelDurationMs] is
  * per-shot (not a flat constant) so the bow's pull-distance-based speed animates correctly. This
  * slot holds at most one shot — with no per-shot cooldown, a fast rapid-fire burst can overwrite
  * it before its own animation finishes, which is why the "HIT" indicator (see
  * [DuelViewModel.hitConfirmedAtMs]) is scheduled independently from fire time rather than from
  * this animation completing, so a confirmed hit is never silently dropped just because a later
- * shot in the same burst replaced this slot first. */
-data class OutgoingShot(
-    val aimAngleDegrees: Float,
-    val firedAtMs: Long,
-    val wasHit: Boolean,
-    val weaponType: WeaponType,
-    val travelDurationMs: Long,
+ * shot in the same burst replaced this slot first.
+ *
+ * A sealed type rather than one flat class with nullable "which target" fields: [AtOpponent] and
+ * [AtCrate] are genuinely different variants (a crate shot has no "was the opponent hit"
+ * question, an opponent shot has no crate id/offset), and a crate id + its captured offset must
+ * always travel together — nullable fields on one class can't enforce that pairing, a sealed
+ * type's own constructor does. Consumers ([DuelScreen], [onProjectileAnimationFinished])
+ * `is`-check the variant instead of null-checking two fields that are supposed to agree.
+ */
+sealed class OutgoingShot {
+    abstract val aimAngleDegrees: Float
+    abstract val firedAtMs: Long
+    abstract val weaponType: WeaponType
+    abstract val travelDurationMs: Long
+
+    /** How far (in dp) this shot's visual travel animates before disappearing — the full
+     * off-screen distance for [AtOpponent], or the crate's own distance from center for
+     * [AtCrate], so the projectile visibly stops at the crate instead of continuing on toward
+     * where the opponent would be. */
+    abstract val maxDistanceDp: Float
+
+    /** A shot aimed at the (unseen) opponent — [wasHit] is already known locally at fire time,
+     * the shooter decides hit/miss unilaterally. */
+    data class AtOpponent(
+        override val aimAngleDegrees: Float,
+        override val firedAtMs: Long,
+        override val weaponType: WeaponType,
+        override val travelDurationMs: Long,
+        val wasHit: Boolean,
+    ) : OutgoingShot() {
+        override val maxDistanceDp: Float = GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP
+    }
+
+    /** A shot whose aim ray hit the active falling crate instead of being aimed at the opponent —
+     * see [DuelViewModel.fireAtCrate]. [offsetDp] is captured at fire time, not re-read later:
+     * DuelScreen freezes the crate's rendered position at this exact value for the remainder of
+     * this shot's flight (rather than continuing to read the crate's own live fall animation), so
+     * the eventual explosion always appears exactly where the projectile visually arrives instead
+     * of at a position the falling crate has since moved away from. */
+    data class AtCrate(
+        override val aimAngleDegrees: Float,
+        override val firedAtMs: Long,
+        override val weaponType: WeaponType,
+        override val travelDurationMs: Long,
+        val crateId: Long,
+        val offsetDp: Vector2,
+    ) : OutgoingShot() {
+        override val maxDistanceDp: Float = hypot(offsetDp.x, offsetDp.y)
+    }
+}
+
+/** A destroyed crate's one-shot explosion effect (rings + particle burst + screen flash/shake) —
+ * [offsetDp] is captured at the moment of destruction since [DuelViewModel.activeCrate] is
+ * cleared in the same call, so nothing else remembers where the crate was. */
+data class CrateExplosionEffect(
+    val triggeredAtMs: Long,
+    val offsetDp: Vector2,
+)
+
+/** A crate-seeking shot that's still in flight, committed to destroying [crateId] once its travel
+ * time elapses (see [DuelViewModel.fireAtCrate]). Deliberately tracked separately from
+ * [DuelViewModel.outgoingShot] — that slot holds at most one shot and a rapid-fire burst (no
+ * per-shot cooldown gates firing) can overwrite it with an unrelated shot before this one's own
+ * animation finishes; if crate resolution depended on that slot still holding *this* shot when its
+ * animation completes, an overwrite would silently drop the resolution — spent ammo, no
+ * explosion, no weapon swap, and the crate would keep falling as if never hit. Resolution here is
+ * instead scheduled independently (mirroring how [DuelViewModel.hitConfirmedAtMs] is scheduled
+ * independently of the same slot for the exact same reason), and [DuelScreen] uses this field
+ * (not [DuelViewModel.outgoingShot]) to freeze the crate's rendered position and to guard against
+ * [DuelViewModel.onCrateLanded] racing the resolution. */
+data class PendingCrateHit(
+    val crateId: Long,
+    val offsetDp: Vector2,
 )
 
 /** An opponent's shot arriving locally, for the receiver's incoming-projectile animation.
@@ -187,6 +256,26 @@ class DuelViewModel @Inject constructor(
      * spawn/pickup/landing — all low-frequency events, so no isolation composable is needed
      * the way reloadProgress needs one. */
     var activeCrate by mutableStateOf<FallingCrate?>(null)
+        private set
+
+    /** The most recent crate destruction's explosion effect, or null. Cleared once its
+     * DuelScreen-side animation finishes (see [onCrateExplosionAnimationFinished]) — same
+     * trigger-timestamp pattern as [lastHitAtMs]. */
+    var crateExplosion by mutableStateOf<CrateExplosionEffect?>(null)
+        private set
+
+    /** A crate-seeking shot still in flight, committed to destroying its target — see
+     * [PendingCrateHit]'s own doc for why this is tracked separately from [outgoingShot]. Null
+     * whenever no crate-hit resolution is currently pending.
+     *
+     * A single nullable slot (not keyed by crate id) is safe only because [activeCrate] is
+     * capped at one crate at a time — [tryFireAtCrate] already refuses to re-target whatever
+     * crate this field currently names, so there's never more than one commitment to track. If
+     * that single-active-crate cap is ever lifted, this must become keyed by crate id (e.g. a
+     * `Map<Long, PendingCrateHit>`), or firing at a second crate while the first's hit is still
+     * pending would silently overwrite this slot and drop the first crate's resolution — the
+     * exact class of bug this field exists to prevent, just reopened for multi-crate concurrency. */
+    var pendingCrateHit by mutableStateOf<PendingCrateHit?>(null)
         private set
 
     /** The opponent's live sniper aim-dot offset, recomputed in *my own* frame every tick (see
@@ -386,24 +475,19 @@ class DuelViewModel @Inject constructor(
     /** Called by DuelScreen once a crate's fall animation reaches progress 1 without having been
      * shot down — frees the spawn slot the same way a successful pickup does, so the single-
      * active-crate cap doesn't permanently deadlock the first time a player simply misses one.
-     * Guarded by id so a crate already cleared by [pickUpCrate] mid-fall isn't double-cleared. */
+     * Guarded by id so a crate already cleared by [triggerCrateExplosion] mid-fall isn't
+     * double-cleared. */
     fun onCrateLanded(crateId: Long) {
         if (activeCrate?.id == crateId) activeCrate = null
     }
 
-    /**
-     * [densityPxPerDp] converts the crate's logical dp position (and hit radius) into the same
-     * px space [drag] is already in — a real two-point Euclidean check needs both points in one
-     * consistent unit. An earlier version instead reconstructed an "aim point" by projecting the
-     * drag's *angle* onto the crate's own radial distance, which reduces to a chord-length
-     * formula and is still an angle-only test in disguise (see [CrateMath.isHit]'s doc for why
-     * that's wrong) — found and fixed during review.
-     */
-    private fun findCrateHit(drag: Offset, densityPxPerDp: Float): FallingCrate? {
-        val crate = activeCrate ?: return null
+    /** The crate's current dp offset from center, or null once it's already landed — shared by
+     * every fire path's crate ray-hit check ([fireInstant]/[fireBow]) so they never disagree
+     * with the renderer about where a crate visually is (position math lives in [CrateMath]). */
+    private fun currentCrateOffsetDp(crate: FallingCrate): Vector2? {
         val progress = CrateMath.fallProgress(crate.spawnedAtMs, System.currentTimeMillis(), crate.fallDurationMs)
         if (CrateMath.hasLanded(progress)) return null
-        val crateOffsetDp = CrateMath.currentOffsetDp(
+        return CrateMath.currentOffsetDp(
             progress = progress,
             laneXDp = crate.laneXDp,
             topYDp = GameConstants.CRATE_SPAWN_TOP_Y_DP,
@@ -411,17 +495,23 @@ class DuelViewModel @Inject constructor(
             wobbleAmplitudeDp = GameConstants.CRATE_WOBBLE_AMPLITUDE_DP,
             wobbleFrequency = GameConstants.CRATE_WOBBLE_FREQUENCY,
         )
-        val crateOffsetPx = Vector2(crateOffsetDp.x * densityPxPerDp, crateOffsetDp.y * densityPxPerDp)
-        val dragPointPx = Vector2(drag.x, drag.y)
-        val hitRadiusPx = GameConstants.CRATE_HIT_RADIUS_DP * densityPxPerDp
-        return crate.takeIf { CrateMath.isHit(dragPointPx, crateOffsetPx, hitRadiusPx) }
     }
 
-    /** A pickup cancels any in-progress reload outright (deliberately generous — crates are
-     * visible and time-limited, so locking pickup behind a finished reload would make many
-     * unreachable by design) and switches weapons immediately at a full magazine. */
-    private fun pickUpCrate(crate: FallingCrate) {
-        activeCrate = null
+    /** Called synchronously from [fireAtCrate] the instant a crate hit is confirmed — cancels any
+     * in-progress reload outright (deliberately generous, same reasoning the old release-to-grab
+     * pickup used: crates are visible and time-limited, so locking pickup behind a finished
+     * reload would make many unreachable by design) and switches weapons immediately at a full
+     * magazine.
+     *
+     * Deliberately **not** delayed to the crate's visual destruction the way [triggerCrateExplosion]
+     * is: this used to be delayed too (both bundled into one `resolveCrateHit`), but that left a
+     * window — between firing at the crate and the projectile visually arriving — during which an
+     * unrelated later shot could start its own reload, only for the crate shot's now-delayed
+     * weapon-switch to silently clobber that unrelated reload out from under it once it finally
+     * ran. Calling this with zero delay, back-to-back with [spendRound] in the same synchronous
+     * call, closes that window entirely: there is no gap for another shot's state to exist in
+     * before this one lands. */
+    private fun equipWeaponFromCrate(crate: FallingCrate) {
         reloadStartedAtMs = null
         activeReload = null
         reloadProgress = 0f
@@ -430,6 +520,30 @@ class DuelViewModel @Inject constructor(
             equippedWeapon = crate.weaponType,
             roundsRemaining = WeaponConfigs.forType(crate.weaponType).magazineSize,
         )
+    }
+
+    /** Called once the crate-seeking projectile's travel time elapses (see [fireAtCrate]) — purely
+     * the crate's *visual* destruction (clearing [activeCrate]/[pendingCrateHit] and triggering the
+     * explosion effect: rings/particles/shake/flash, see DuelScreen) at its last known position.
+     * The gameplay effect of a crate hit (weapon switch) already happened immediately at fire time
+     * via [equipWeaponFromCrate] — this function never touches ammo/reload/equippedWeapon, so it
+     * can never clobber whatever the player has done with their weapon in the meantime. Guarded by
+     * the caller against a crate that already landed/cleared mid-flight. */
+    private fun triggerCrateExplosion(crate: FallingCrate, offsetDp: Vector2) {
+        activeCrate = null
+        pendingCrateHit = null
+        uiState = uiState.copy(crateExplosionFlash = true)
+        crateExplosion = CrateExplosionEffect(System.currentTimeMillis(), offsetDp)
+        viewModelScope.launch {
+            delay(GameConstants.CRATE_EXPLOSION_FLASH_DURATION_MS)
+            uiState = uiState.copy(crateExplosionFlash = false)
+        }
+    }
+
+    /** Called by DuelScreen once a destroyed crate's explosion animation finishes — same
+     * guarded-by-timestamp clearing pattern as [onCrateLanded]/[onProjectileAnimationFinished]. */
+    fun onCrateExplosionAnimationFinished(triggeredAtMs: Long) {
+        if (crateExplosion?.triggeredAtMs == triggeredAtMs) crateExplosion = null
     }
 
     private fun currentReload(): Reload {
@@ -453,6 +567,15 @@ class DuelViewModel @Inject constructor(
         reloadProgress = 0f
         isInPerfectReloadZone = false
         uiState = uiState.copy(roundsRemaining = 0)
+    }
+
+    /** Spends one round of the equipped magazine, auto-starting a reload if that empties it —
+     * shared by every shot's tail, whether it lands on the opponent ([commitShot]) or on a crate
+     * ([fireAtCrate]), so the two paths' ammo/reload bookkeeping can't drift apart. */
+    private fun spendRound(now: Long) {
+        val roundsAfterFiring = uiState.roundsRemaining - 1
+        uiState = uiState.copy(roundsRemaining = roundsAfterFiring)
+        if (roundsAfterFiring <= 0) startReload(now)
     }
 
     private fun completeReload() {
@@ -671,18 +794,17 @@ class DuelViewModel @Inject constructor(
     }
 
     /**
-     * [densityPxPerDp] (pixels-per-dp, i.e. `with(density) { 1.dp.toPx() }`) is used by the
-     * bow's pull-distance-to-speed calculation and by the crate hit-test's dp->px conversion;
-     * every other weapon ignores it. Passed in from DuelScreen (which has Density available
-     * inside its pointerInput block) rather than computed here, since this ViewModel has no
-     * Compose/Android dependency of its own.
+     * [densityPxPerDp] (pixels-per-dp, i.e. `with(density) { 1.dp.toPx() }`) is used only by the
+     * bow's pull-distance-to-speed calculation; every other weapon ignores it. Passed in from
+     * DuelScreen (which has Density available inside its pointerInput block) rather than
+     * computed here, since this ViewModel has no Compose/Android dependency of its own.
      *
-     * Release is checked in a fixed priority order, each guard independent of the others: (1) an
-     * active laser beam always just ends the beam — see [startLaserBeam]'s doc for why it can
-     * never also pick up a crate; (2) a crate under the release point is always picked up, even
-     * if the same release would also have hit the opponent or the weapon is still reloading —
-     * crates are visible/time-limited, so they take priority over both; (3) otherwise, firing
-     * proceeds only if ammo allows it.
+     * Release is checked in a fixed priority order: (1) an active laser beam always just ends
+     * the beam — see [startLaserBeam]'s doc for why it never interacts with crates either; (2)
+     * otherwise, firing proceeds only if ammo allows it. A crate is no longer picked up by simply
+     * releasing near it — [fireInstant]/[fireBow] each check whether the fired shot's own aim ray
+     * actually hits the crate (see [currentCrateOffsetDp]/[CrateMath.isRayHit]), so destroying a
+     * crate now spends a real shot exactly like firing at the opponent would.
      */
     fun onAimRelease(densityPxPerDp: Float) {
         val drag = aimDrag
@@ -690,12 +812,6 @@ class DuelViewModel @Inject constructor(
 
         if (uiState.equippedWeapon == WeaponType.LASER && isLaserBeamActive) {
             laserBeamJob?.cancel() // triggers finishLaserBeam() above -> sends exactly one FireEvent
-            return
-        }
-
-        val crateHit = drag?.let { findCrateHit(it, densityPxPerDp) }
-        if (crateHit != null) {
-            pickUpCrate(crateHit)
             return
         }
 
@@ -726,6 +842,9 @@ class DuelViewModel @Inject constructor(
     private fun fireInstant(drag: Offset) {
         val config = uiState.equippedWeaponConfig
         val (aimAngle, bearing) = currentAimAndBearing(drag)
+
+        if (tryFireAtCrate(aimAngle, config, config.projectileSpeedDpPerSec)) return
+
         val hit = HitTest.testHit(aimAngle, bearing, config.hitToleranceDegrees)
         commitShot(
             weaponType = config.type,
@@ -734,6 +853,89 @@ class DuelViewModel @Inject constructor(
             travelDurationMs = GameConstants.PROJECTILE_TRAVEL_DURATION_MS,
             sendDelayMs = config.projectileOffscreenTravelTimeMs,
         )
+    }
+
+    /** Shared by [fireInstant]/[fireBow]: both need the exact same "does this shot's aim ray hit
+     * the active crate" gate before falling back to the normal opponent hit test, differing only
+     * in which speed feeds the crate-seeking projectile's travel duration (a flat per-weapon speed
+     * vs. the bow's per-shot pull-distance speed). Kept as one shared helper so a future change to
+     * crate-hit priority/logic can't silently drift between the two call sites. Also refuses to
+     * re-target a crate that already has a shot committed to destroying it (see [pendingCrateHit])
+     * — without this, a rapid double-tap could spend a second round on the same crate, with only
+     * one of the two shots' arrivals actually able to resolve it. Returns true if it fired at the
+     * crate (caller should stop and not also run the opponent hit test). */
+    private fun tryFireAtCrate(aimAngleDegrees: Float, config: WeaponConfig, speedDpPerSec: Float): Boolean {
+        val crate = activeCrate ?: return false
+        if (pendingCrateHit?.crateId == crate.id) return false
+        val crateOffsetDp = currentCrateOffsetDp(crate) ?: return false
+        if (!CrateMath.isRayHit(aimAngleDegrees, crateOffsetDp, GameConstants.CRATE_HIT_RADIUS_DP)) return false
+        fireAtCrate(crate, aimAngleDegrees, config, crateOffsetDp, speedDpPerSec)
+        return true
+    }
+
+    /** Fired instead of [commitShot] when [tryFireAtCrate] finds the shot's own aim ray hits the
+     * active crate: spends ammo on the weapon that fired, then immediately swaps to the crate's
+     * weapon ([equipWeaponFromCrate]) — no FireEvent is sent, since this shot was never aimed at
+     * the opponent and has nothing to tell them.
+     *
+     * Two effects, two different timings: the *gameplay* effect (ammo spend + weapon swap) is
+     * immediate/synchronous, so there's no window for another shot's own reload/weapon state to
+     * exist in between and get silently clobbered when this one lands (see
+     * [equipWeaponFromCrate]'s doc for why that matters). The *visual* effect (the crate actually
+     * disappearing in an explosion) is still delayed until [travelDurationMs] elapses, scheduled
+     * here directly rather than from [onProjectileAnimationFinished] — mirroring
+     * [scheduleHitConfirmation]'s own doc: [outgoingShot] holds at most one shot, and a rapid-fire
+     * burst (no per-shot cooldown gates firing) can overwrite it with an unrelated shot before this
+     * one's own DuelScreen animation finishes, which would otherwise silently drop the visual
+     * resolution entirely. [pendingCrateHit] is the durable record of this commitment instead —
+     * DuelScreen uses it (not [outgoingShot]) to freeze the crate's rendered position and to guard
+     * [onCrateLanded] against racing it, so the falling crate can't visibly drift away from where
+     * this shot is headed before the explosion lands, regardless of what else gets fired in the
+     * meantime. */
+    private fun fireAtCrate(
+        crate: FallingCrate,
+        aimAngleDegrees: Float,
+        config: WeaponConfig,
+        crateOffsetDp: Vector2,
+        speedDpPerSec: Float,
+    ) {
+        val now = System.currentTimeMillis()
+        val distanceDp = hypot(crateOffsetDp.x, crateOffsetDp.y)
+        val travelDurationMs = ((distanceDp / speedDpPerSec) * 1000).toLong()
+            .coerceAtLeast(GameConstants.CRATE_HIT_MIN_TRAVEL_DURATION_MS)
+
+        outgoingShot = OutgoingShot.AtCrate(
+            aimAngleDegrees = aimAngleDegrees,
+            firedAtMs = now,
+            weaponType = config.type,
+            travelDurationMs = travelDurationMs,
+            crateId = crate.id,
+            offsetDp = crateOffsetDp,
+        )
+        weaponSoundPlayer.playFireSound(config.type)
+        // Spend the round on the weapon that fired, then immediately equip the crate's weapon —
+        // back-to-back with no suspension in between, so there is no window for another shot to
+        // observe (or be clobbered by) an in-between state. See equipWeaponFromCrate's own doc for
+        // why this can't be delayed to the crate's visual destruction the way it used to be.
+        spendRound(now)
+        equipWeaponFromCrate(crate)
+
+        val targetCrateId = crate.id
+        pendingCrateHit = PendingCrateHit(targetCrateId, crateOffsetDp)
+        viewModelScope.launch {
+            delay(travelDurationMs)
+            // The crate may have already landed during this shot's brief flight if something
+            // else cleared it unexpectedly — triggerCrateExplosion is skipped in that case, same
+            // "decided at fire time, only revealed on arrival" pattern as the opponent hit test.
+            // In practice this is fully defensive: DuelScreen's crate-landed guard checks this
+            // same pendingCrateHit field specifically so it can never fire early for this crate.
+            val stillActiveCrate = activeCrate
+            if (stillActiveCrate?.id == targetCrateId) {
+                triggerCrateExplosion(stillActiveCrate, crateOffsetDp)
+            } else {
+                pendingCrateHit = null
+            }
+        }
     }
 
     /** The bow's "winds up" (a minimum hold before firing is allowed — an early release is a
@@ -752,9 +954,11 @@ class DuelViewModel @Inject constructor(
 
         val pullFraction = BowMath.pullFraction(hypot(drag.x, drag.y), maxDragRadiusPx)
         val speed = BowMath.speedDpPerSec(pullFraction, config.bowMinSpeedDpPerSec, config.bowMaxSpeedDpPerSec)
-        val travelDurationMs = (GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP / speed * 1000).toLong()
-
         val (aimAngle, bearing) = currentAimAndBearing(drag)
+
+        if (tryFireAtCrate(aimAngle, config, speed)) return
+
+        val travelDurationMs = (GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP / speed * 1000).toLong()
         val hit = HitTest.testHit(aimAngle, bearing, config.hitToleranceDegrees)
         // A weak draw is slower end-to-end on the wire too, not just visually — travelDurationMs
         // doubles as both the visual travel time and the network send delay.
@@ -773,12 +977,15 @@ class DuelViewModel @Inject constructor(
         sendDelayMs: Long,
     ) {
         val now = System.currentTimeMillis()
-        outgoingShot = OutgoingShot(aimAngleDegrees, now, hit, weaponType, travelDurationMs)
+        outgoingShot = OutgoingShot.AtOpponent(
+            aimAngleDegrees = aimAngleDegrees,
+            firedAtMs = now,
+            weaponType = weaponType,
+            travelDurationMs = travelDurationMs,
+            wasHit = hit,
+        )
         weaponSoundPlayer.playFireSound(weaponType)
-
-        val roundsAfterFiring = uiState.roundsRemaining - 1
-        uiState = uiState.copy(roundsRemaining = roundsAfterFiring)
-        if (roundsAfterFiring <= 0) startReload(now)
+        spendRound(now)
 
         viewModelScope.launch {
             // Flat delay standing in for projectile flight time (see GameConstants doc) — the
@@ -801,6 +1008,10 @@ class DuelViewModel @Inject constructor(
         }
     }
 
+    /** Purely visual: frees [outgoingShot]'s animation slot. A crate-seeking shot's actual
+     * resolution is scheduled independently in [fireAtCrate] (see [pendingCrateHit]'s doc for
+     * why), not from here — this callback firing or not firing for a given shot has no bearing on
+     * whether that shot's crate hit lands. */
     fun onProjectileAnimationFinished(firedAtMs: Long) {
         val shot = outgoingShot ?: return
         if (shot.firedAtMs != firedAtMs) return

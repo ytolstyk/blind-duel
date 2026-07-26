@@ -16,6 +16,10 @@
 - Loud weapons (pistol, shotgun, sniper) always telegraph an incoming shot to the opponent even on a miss, as before; the two new silent weapons (bow, laser) give the opponent zero warning unless they're actually hit.
 - Added placeholder per-weapon fire sound cues via Android's built-in tone generator (no audio assets exist in the project yet — swap in real sound effects later).
 - The aim line and character now render at reduced opacity while out of ammo (mid-reload or a spent single-charge weapon), since aiming still works during a reload for crate-targeting purposes even though firing doesn't.
+- Weapon crates now fall more slowly, giving more time to react and aim.
+- Destroying a weapon crate now requires actually shooting it: firing a shot whose aim ray passes near the crate spends a round and, once the projectile reaches it, blows it up (screen shake, particle burst, color flash) before granting the new weapon — replacing the old "release your drag near the crate" free-grab.
+- Each weapon's aim line now previews its actual firing behavior instead of a plain line for every weapon: shotgun shows a widening cone, sniper shows a target reticle at the tip, bow shows an arrowhead, and laser (which fires immediately on touch) shows only its full sweeping beam.
+- Taking a hit now sprays a directional burst of debris particles off the side of the character facing the incoming shot, and the incoming projectile now visibly shrinks/fades into the character as it arrives instead of just popping on contact.
 
 ### Fixed
 - Solo Test Mode (practice) never tracked the practice dummy's health, so landing hits never ended the duel or showed the win screen. `LoopbackGameConnection` now applies damage to a simulated opponent and echoes back `HealthUpdate`s, so 3 hits now resolves a win exactly like a real duel.

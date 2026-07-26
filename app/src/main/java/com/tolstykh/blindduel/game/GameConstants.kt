@@ -205,16 +205,16 @@ object GameConstants {
     const val LASER_INCOMING_TRAVEL_DURATION_MS = 150L
 
     // Weapon crates — fall independently on each device (no network sync), capped to one
-    // active at a time. Hit-tested by CrateMath.isHit as a direct Euclidean distance around
-    // the crate's actual position (not an angular tolerance — a crate is visible, unlike the
-    // blind opponent, so its hit region should be a fixed-size area, not an angular cone whose
-    // absolute width would otherwise scale with the crate's current distance from center).
-    // Top/bottom Y are logical dp values (not tied to any real device's screen height), the
-    // same "arbitrary but comfortably large, and shared [by renderer and hit-test]" convention
-    // already used by PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP.
+    // active at a time. A fired shot destroys the crate if its aim ray passes within
+    // CRATE_HIT_RADIUS_DP of the crate's actual position (CrateMath.isRayHit) — a fixed-size
+    // area around the crate's true position, not an angular tolerance (a crate is visible,
+    // unlike the blind opponent, so its hit region shouldn't scale with distance from center the
+    // way an angular cone would). Top/bottom Y are logical dp values (not tied to any real
+    // device's screen height), the same "arbitrary but comfortably large, and shared [by
+    // renderer and hit-test]" convention already used by PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP.
     const val CRATE_SPAWN_MIN_INTERVAL_MS = 8_000L
     const val CRATE_SPAWN_MAX_INTERVAL_MS = 15_000L
-    const val CRATE_FALL_DURATION_MS = 3_000L
+    const val CRATE_FALL_DURATION_MS = 7_000L
     const val CRATE_HIT_RADIUS_DP = 80f
     const val CRATE_SPAWN_TOP_Y_DP = -600f
     const val CRATE_LAND_BOTTOM_Y_DP = 600f
@@ -222,6 +222,22 @@ object GameConstants {
     const val CRATE_WOBBLE_AMPLITUDE_DP = 24f
     const val CRATE_WOBBLE_FREQUENCY = 2.2f
     const val CRATE_LANE_MARGIN_DP = 60f
+
+    // Crate destruction — a shot that hits a falling crate is "spent" on the crate instead of
+    // being aimed at the opponent (see DuelViewModel.fireAtCrate): its outgoing projectile
+    // animates only as far as the crate's current position (never the full off-screen travel
+    // distance), so a minimum floor keeps that tween from collapsing to ~0ms for a crate that
+    // happens to be very close to center at fire time.
+    const val CRATE_HIT_MIN_TRAVEL_DURATION_MS = 90L
+    const val CRATE_EXPLOSION_DURATION_MS = 500
+    const val CRATE_EXPLOSION_PARTICLE_COUNT = 14
+    const val CRATE_EXPLOSION_PARTICLE_MAX_DISTANCE_DP = 100f
+    const val CRATE_EXPLOSION_PARTICLE_SIZE_DP = 6f
+    const val CRATE_EXPLOSION_FLASH_DURATION_MS = 220L
+    const val CRATE_EXPLOSION_FLASH_PEAK_ALPHA = 0.3f
+    const val CRATE_EXPLOSION_SHAKE_MAGNITUDE_DP = 8f
+    const val CRATE_EXPLOSION_SHAKE_CYCLES_X = 4f
+    const val CRATE_EXPLOSION_SHAKE_CYCLES_Y = 5f
 
     // A raw numeric field on FireEvent (bow's per-shot travel duration) must be clamped on
     // receipt like every other peer-supplied number — comfortably above the slowest
@@ -233,6 +249,40 @@ object GameConstants {
     // "purely cosmetic but still a shared tunable" constant in this file, e.g. SHOTGUN_PELLET_*.
     const val OUT_OF_AMMO_AIM_ALPHA = 0.35f
     const val LASER_BEAM_WIDTH_MULTIPLIER = 2.5f
+
+    // Per-weapon aim-line shape (drawn while dragging, before release/fire) — purely cosmetic,
+    // hit-testing is never affected by any of these. LASER has no entry here: its "aim line" is
+    // the full sweeping beam itself (drawn separately once the beam starts), so the generic
+    // short aim indicator is skipped entirely for that weapon rather than drawing a redundant
+    // second line on top of it.
+    const val SHOTGUN_AIM_CONE_HALF_ANGLE_DEGREES = 16f
+    const val SHOTGUN_AIM_CONE_FILL_ALPHA_FACTOR = 0.18f
+    const val SNIPER_AIM_RETICLE_RADIUS_DP = 18f
+    const val SNIPER_AIM_RETICLE_TICK_LENGTH_DP = 10f
+    const val SNIPER_AIM_RETICLE_TICK_STROKE_FACTOR = 0.6f
+    const val BOW_AIM_ARROWHEAD_LENGTH_DP = 20f
+    const val BOW_AIM_ARROWHEAD_WIDTH_DP = 16f
+
+    // Directional hit-particle splash — a spray of debris kicked off the side of the character
+    // facing the incoming shot, on top of the existing symmetric explosion rings. Seeded off
+    // lastHitAtMs (see DuelScreen) so the spray is deterministic per hit, not re-rolled per frame.
+    const val HIT_PARTICLE_COUNT = 10
+    const val HIT_PARTICLE_SPREAD_DEGREES = 50f
+    const val HIT_PARTICLE_MAX_DISTANCE_DP = 90f
+    const val HIT_PARTICLE_SIZE_DP = 5f
+    // Shared floor for a particle burst's randomized per-particle speed — used by both the
+    // directional hit-particle spray above and the omnidirectional crate-explosion burst (see
+    // DuelScreen.randomSpraySeeds), not specific to either one.
+    const val PARTICLE_BURST_MIN_SPEED_FACTOR = 0.5f
+    // Shared per-particle shrink-over-lifetime factor for the same two particle bursts.
+    const val PARTICLE_SHRINK_FACTOR = 0.5f
+
+    // Incoming-hit "absorption" — as a hit projectile's travel progress nears 1 (arriving at the
+    // character, distance -> 0), its head shrinks/fades toward this floor instead of just
+    // reaching center and popping, selling the look of sinking into the character rather than
+    // stopping short. Never applied to a miss (which overshoots past the character instead) or
+    // to any outgoing shot.
+    const val PROJECTILE_ARRIVAL_SHRINK_FACTOR = 0.9f
 
     /** Assembles the flat per-weapon constants above into one [WeaponConfig] per [WeaponType]. */
     object WeaponConfigs {
