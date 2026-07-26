@@ -39,6 +39,13 @@ class GameSession @Inject constructor() {
     val practiceStartingWeapon: WeaponType get() = practiceSettings?.startingWeapon ?: WeaponType.PISTOL
     val cratesEnabledForDuel: Boolean get() = practiceSettings?.cratesEnabled ?: true
 
+    /** The match's max health — host-chosen (see MainMenuScreen's match-length picker),
+     * adopted by the joiner via GameMessage.Hello.maxHealth. Not reset by [resetForNewDuel]
+     * (a rematch keeps the host's original pick), but is reset by [enterPracticeMode] so a
+     * previously-chosen real-match value can never leak into a later Solo Test session. */
+    var matchMaxHealth: Int = GameConstants.MAX_PLAYER_HEALTH
+        private set
+
     var finalOutcome: DuelOutcome = DuelOutcome.Ongoing
         private set
     var finalMyHealth: Int = GameConstants.MAX_PLAYER_HEALTH
@@ -55,15 +62,31 @@ class GameSession @Inject constructor() {
     }
 
     /** Called from Solo Test's entry point with the main menu's chosen options, in one atomic
-     * step — see [practiceSettings]'s doc for why this replaced two separately-mutated fields. */
+     * step — see [practiceSettings]'s doc for why this replaced two separately-mutated fields.
+     * Also resets [matchMaxHealth] to the constant default: a real match's chosen match length
+     * lives outside [practiceSettings] (it's meaningful to Solo Test too, via
+     * [LoopbackGameConnection]), so it needs its own explicit reset here rather than inheriting
+     * [practiceSettings]'s enter/exit hygiene for free. */
     fun enterPracticeMode(startingWeapon: WeaponType, cratesEnabled: Boolean) {
         practiceSettings = PracticeSettings(startingWeapon, cratesEnabled)
+        matchMaxHealth = GameConstants.MAX_PLAYER_HEALTH
     }
 
     /** Called from the real Create/Join entry points, so a Solo Test session's leftover
      * settings can never be observed by a subsequent real match. */
     fun exitPracticeMode() {
         practiceSettings = null
+    }
+
+    /** Clamped to the valid [MatchLength] range here, not just at JoinViewModel's one current
+     * call site — a defense-in-depth floor so a future caller forwarding an unclamped
+     * peer-supplied value can't reopen the crash class this field's own doc warns about
+     * (negative/zero flowing into DotsRow.repeat or HealthMath.applyDamage's coerceIn). */
+    fun recordMatchMaxHealth(value: Int) {
+        matchMaxHealth = value.coerceIn(
+            MatchLength.entries.minOf { it.maxHealth },
+            MatchLength.entries.maxOf { it.maxHealth },
+        )
     }
 
     fun recordCalibration(myBaseline: Float, opponentBaseline: Float, aligned: Boolean) {
@@ -80,8 +103,10 @@ class GameSession @Inject constructor() {
 
     fun resetForNewDuel() {
         finalOutcome = DuelOutcome.Ongoing
-        finalMyHealth = GameConstants.MAX_PLAYER_HEALTH
-        finalOpponentHealth = GameConstants.MAX_PLAYER_HEALTH
+        // Uses matchMaxHealth (not the raw constant) so a rematch keeps the host's originally
+        // chosen match length instead of silently reverting to the default.
+        finalMyHealth = matchMaxHealth
+        finalOpponentHealth = matchMaxHealth
     }
 }
 

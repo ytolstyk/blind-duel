@@ -9,6 +9,33 @@ object GameConstants {
     const val MAX_PLAYER_HEALTH = 3
     const val HIT_DAMAGE = 1
 
+    // Match length — a pre-duel host-only option (see MainMenuScreen's match-length picker).
+    // The joiner always adopts the host's choice via GameMessage.Hello.maxHealth rather than
+    // picking independently, since this game has no server to arbitrate a mismatch.
+    const val MATCH_LENGTH_QUICK_HEALTH = 2
+    const val MATCH_LENGTH_STANDARD_HEALTH = MAX_PLAYER_HEALTH
+    const val MATCH_LENGTH_MARATHON_HEALTH = 5
+
+    // Dodge/juke — a tappable HUD button that briefly narrows the *opponent's* effective hit
+    // tolerance against you, via a zero-payload GameMessage.DodgeEvent. See HitToleranceMath's
+    // doc in DuelEngine.kt for how this combines with fog-of-war below.
+    const val DODGE_COOLDOWN_MS = 2500L
+    const val DODGE_WINDOW_MS = 600L
+    const val DODGE_TOLERANCE_MULTIPLIER = 0.5f
+
+    // Fog-of-war confidence decay — the longer since the local player's own last detected
+    // step, the more their own outgoing-shot hit tolerance widens (a forgiving cone),
+    // formalizing "your sensor estimate gets worse over time" into an intentional mechanic.
+    // Not shown to the player. See HitToleranceMath's doc in DuelEngine.kt for how this
+    // combines with dodge above.
+    const val FOG_OF_WAR_DECAY_START_MS = 2_500L
+    const val FOG_OF_WAR_DECAY_FULL_MS = 9_000L
+    // Proportional, not a flat degree bonus — a flat +N° would be a huge swing on the sniper's
+    // narrow base tolerance but a small one on the shotgun's wide base tolerance, breaking
+    // per-weapon balance. A fraction of each weapon's own base tolerance scales sanely across
+    // all five weapons.
+    const val FOG_OF_WAR_MAX_BONUS_FRACTION = 0.5f
+
     // Magazine / reload — three shots per magazine, then a long reload. This is the only pacing
     // lever between shots now: firing has no per-shot cooldown of its own, only the magazine
     // running dry (or a voluntary early reload) creates a break in the action.
@@ -389,4 +416,12 @@ object GameConstants {
             }
         }
     }
+}
+
+/** A pre-duel, host-only match-length choice — not `@Serializable` since only the raw `Int`
+ * health value crosses the wire (see `GameMessage.Hello.maxHealth`), never this enum itself. */
+enum class MatchLength(val displayName: String, val maxHealth: Int) {
+    QUICK("Quick Duel", GameConstants.MATCH_LENGTH_QUICK_HEALTH),
+    STANDARD("Standard", GameConstants.MATCH_LENGTH_STANDARD_HEALTH),
+    MARATHON("Marathon", GameConstants.MATCH_LENGTH_MARATHON_HEALTH),
 }

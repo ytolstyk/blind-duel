@@ -34,7 +34,7 @@ class CreateViewModel @Inject constructor(
         connection.connectionState
             .onEach { state ->
                 if (state is ConnectionState.Connected) {
-                    connection.sendMessage(GameMessage.Hello(gameSession.localPlayerName))
+                    connection.sendMessage(GameMessage.Hello(gameSession.localPlayerName, gameSession.matchMaxHealth))
                 }
             }
             .launchIn(viewModelScope)
@@ -43,6 +43,14 @@ class CreateViewModel @Inject constructor(
             .onEach { message ->
                 if (message is GameMessage.Hello) {
                     gameSession.recordOpponentName(message.name)
+                    // Deliberately does NOT call gameSession.recordMatchMaxHealth(message.maxHealth)
+                    // here: the host already set its own real choice before this screen was even
+                    // reached (MainMenuViewModel.prepareToHost()), and the joiner's Hello carries
+                    // only a meaningless default. Adopting it here would silently clobber the
+                    // host's real pick — see JoinViewModel's own Hello-received handler, which is
+                    // the one side that's actually supposed to adopt this value. A future refactor
+                    // that unifies this near-identical handler with JoinViewModel's should not
+                    // "simplify" this difference away.
                     isConnected = true
                 }
             }

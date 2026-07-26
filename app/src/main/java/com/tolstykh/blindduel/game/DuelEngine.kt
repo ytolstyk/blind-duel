@@ -314,3 +314,88 @@ object CrateMath {
         return hypot(crateOffsetDp.x - closestX, crateOffsetDp.y - closestY) <= hitRadiusDp
     }
 }
+
+/** Fog-of-war confidence decay: the longer since the local player's own last detected step,
+ * the more their own outgoing-shot hit tolerance widens — formalizing "your sensor estimate
+ * gets worse over time" into an intentional, forgiving-cone mechanic. Never shown to the
+ * player. See [HitToleranceMath] for how this combines with [DodgeMath]. */
+object FogOfWarMath {
+    /** Grows tolerance from [baseToleranceDegrees] toward `baseToleranceDegrees * (1 +
+     * [maxBonusFraction])` as [msSinceLastStep] grows from [graceMs] to [fullDecayMs] — a
+     * proportional (not flat-degree) bonus so it scales sanely across per-weapon base
+     * tolerances from the sniper's narrow cone to the shotgun's wide one. Never applied before
+     * [graceMs] elapses, so the first few seconds/steps of a duel aren't already forgiving. */
+    fun widenedToleranceDegrees(
+        baseToleranceDegrees: Float,
+        msSinceLastStep: Long,
+        graceMs: Long,
+        fullDecayMs: Long,
+        maxBonusFraction: Float,
+    ): Float {
+        if (msSinceLastStep <= graceMs) return baseToleranceDegrees
+        val decayWindowMs = (fullDecayMs - graceMs).coerceAtLeast(1L)
+        val fraction = ((msSinceLastStep - graceMs).toFloat() / decayWindowMs).coerceIn(0f, 1f)
+        return baseToleranceDegrees * (1f + maxBonusFraction * fraction)
+    }
+}
+
+/** Dodge/juke: a tappable HUD button that broadcasts a zero-payload `GameMessage.DodgeEvent`,
+ * received and timestamped locally (never trusting a peer-supplied timestamp — sidesteps clock
+ * skew) by the opponent's device, which then briefly narrows its own effective hit tolerance
+ * against the dodging player. See [HitToleranceMath] for how this combines with [FogOfWarMath]. */
+object DodgeMath {
+    fun isDodging(nowMs: Long, dodgeReceivedAtMs: Long?, windowMs: Long): Boolean =
+        dodgeReceivedAtMs != null && nowMs - dodgeReceivedAtMs < windowMs
+
+    fun narrowedToleranceDegrees(toleranceDegrees: Float, multiplier: Float): Float =
+        toleranceDegrees * multiplier
+
+    /** Receive-side rate limit on an incoming DodgeEvent, not just the sender's own UI cooldown
+     * — a modified client could otherwise spam DodgeEvent to stay permanently "dodging" (every
+     * hit test narrowed, indefinitely). Rejecting anything faster than [cooldownMs] bounds a
+     * spamming peer to the same duty cycle a well-behaved client produces. Pure and unit-tested
+     * specifically because this is anti-cheat-relevant peer-trust logic, not just UI polish. */
+    fun shouldAcceptDodgeEvent(nowMs: Long, lastAcceptedAtMs: Long?, cooldownMs: Long): Boolean =
+        lastAcceptedAtMs == null || nowMs - lastAcceptedAtMs >= cooldownMs
+}
+
+/** The single place fog-of-war and dodge combine, so DuelViewModel's 3 hit-test call sites
+ * never each re-derive this. Fog widens [FogOfWarMath] first; dodge then narrows
+ * multiplicatively on top of the *widened* value via [DodgeMath] — note this order is not
+ * itself what guarantees safety, since both steps are scalar multiplies and commute. The
+ * actual safety invariant — dodge can never make a shot *easier* to land than not dodging, at
+ * any fog level — holds only because
+ * `(1 + GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION) * GameConstants.DODGE_TOLERANCE_MULTIPLIER < 1`.
+ * This is a cross-constant relationship `GameConstants.kt` can't express on its own, so
+ * [GameConstants.WeaponConfigs]'s own `init { check(...) }` pattern is reused below — it fails
+ * loudly if a future retune of either constant breaks it, instead of silently letting a dodged
+ * shot land more easily than an un-dodged one. See `HitToleranceMathTest` for the runtime
+ * invariant check across every weapon's real tolerance. */
+object HitToleranceMath {
+    fun effectiveToleranceDegrees(
+        baseToleranceDegrees: Float,
+        msSinceLastStep: Long,
+        isDodging: Boolean,
+        fogGraceMs: Long,
+        fogFullDecayMs: Long,
+        fogMaxBonusFraction: Float,
+        dodgeMultiplier: Float,
+    ): Float {
+        val widened = FogOfWarMath.widenedToleranceDegrees(
+            baseToleranceDegrees, msSinceLastStep, fogGraceMs, fogFullDecayMs, fogMaxBonusFraction,
+        )
+        return if (isDodging) DodgeMath.narrowedToleranceDegrees(widened, dodgeMultiplier) else widened
+    }
+
+    init {
+        // Fails the moment either constant changes in a way that would let a dodged shot land
+        // more easily than an un-dodged one — a future "just bump the fog bonus a bit" tuning
+        // pass otherwise has no other signal that it silently broke this invariant.
+        check(
+            (1f + GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION) * GameConstants.DODGE_TOLERANCE_MULTIPLIER < 1f,
+        ) {
+            "Dodge would no longer guarantee a narrower tolerance than baseline under max fog — " +
+                "see HitToleranceMath's doc comment."
+        }
+    }
+}

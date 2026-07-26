@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tolstykh.blindduel.BuildConfig
 import com.tolstykh.blindduel.game.GameConstants.WeaponConfigs
+import com.tolstykh.blindduel.game.MatchLength
 import com.tolstykh.blindduel.game.WeaponType
 import com.tolstykh.blindduel.permission.GamePermissions
 
@@ -116,6 +117,12 @@ fun MainMenuScreen(
                     .padding(top = 24.dp, bottom = 16.dp),
             )
 
+            MatchLengthOptions(
+                selected = viewModel.selectedMatchLength,
+                onSelected = viewModel::onMatchLengthSelected,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+
             Button(
                 onClick = { requestAndProceed(PendingAction.Create) },
                 modifier = Modifier.fillMaxWidth(),
@@ -145,6 +152,33 @@ fun MainMenuScreen(
                         onNavigateToSoloTest()
                     },
                     modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Host-only match-length picker — NOT debug-gated, unlike [SoloTestOptions] below, since this
+ * must work in release builds. The joiner never picks their own; they always adopt whichever
+ * value the host chose, via GameMessage.Hello (see JoinViewModel). */
+@Composable
+private fun MatchLengthOptions(
+    selected: MatchLength,
+    onSelected: (MatchLength) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = "Match length (applies when you Create — joiners follow the host)",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MatchLength.entries.forEach { length ->
+                FilterChip(
+                    selected = selected == length,
+                    onClick = { onSelected(length) },
+                    label = { Text(length.displayName) },
                 )
             }
         }

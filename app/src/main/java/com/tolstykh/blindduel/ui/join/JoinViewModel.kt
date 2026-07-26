@@ -43,6 +43,16 @@ class JoinViewModel @Inject constructor(
             .onEach { message ->
                 if (message is GameMessage.Hello) {
                     gameSession.recordOpponentName(message.name)
+                    // Adopt the host's chosen match length — the joiner never picks one of its
+                    // own (see MainMenuScreen's host-only picker). The raw peer-supplied value
+                    // is passed straight through: recordMatchMaxHealth itself clamps to the
+                    // valid MatchLength range (defense-in-depth, same trust-boundary treatment
+                    // as every other peer-supplied number in this codebase — HealthUpdate.
+                    // remainingHealth, FireEvent.travelDurationMs — an unclamped value here
+                    // would otherwise flow into DotsRow's repeat(totalCount) or HealthMath.
+                    // applyDamage's coerceIn and crash on a modified/buggy host's out-of-range
+                    // value).
+                    gameSession.recordMatchMaxHealth(message.maxHealth)
                     isConnected = true
                 }
             }

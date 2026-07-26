@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.data.AppPreferencesRepository
+import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.GameSession
+import com.tolstykh.blindduel.game.MatchLength
 import com.tolstykh.blindduel.game.WeaponType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -24,6 +26,12 @@ class MainMenuViewModel @Inject constructor(
     private val appPrefs: AppPreferencesRepository,
 ) : ViewModel() {
     var playerName by mutableStateOf("")
+        private set
+
+    /** Host-only pre-duel choice (see MainMenuScreen's non-debug match-length picker) — the
+     * joiner always adopts whatever the host picked, via GameMessage.Hello, so this state is
+     * meaningless/unused on the Join path. Not persisted, reset each process start. */
+    var selectedMatchLength by mutableStateOf(MatchLength.STANDARD)
         private set
 
     /** Solo Test-only options, shown in the debug-gated section of the main menu. Not
@@ -59,13 +67,23 @@ class MainMenuViewModel @Inject constructor(
     fun prepareToHost() {
         commitPlayerName()
         gameSession.exitPracticeMode()
+        gameSession.recordMatchMaxHealth(selectedMatchLength.maxHealth)
         activeGameConnection.selectNearby()
     }
 
     fun prepareToJoin() {
         commitPlayerName()
         gameSession.exitPracticeMode()
+        // The joiner's real match length arrives later via the host's Hello — reset to the
+        // constant default here so a value left over from a previous match (as either host or
+        // joiner) can never be shown/used before that Hello lands, mirroring exitPracticeMode()
+        // just above for the same "clear stale state from a prior session" reason.
+        gameSession.recordMatchMaxHealth(GameConstants.MAX_PLAYER_HEALTH)
         activeGameConnection.selectNearby()
+    }
+
+    fun onMatchLengthSelected(length: MatchLength) {
+        selectedMatchLength = length
     }
 
     fun onSoloTestWeaponChanged(weapon: WeaponType) {

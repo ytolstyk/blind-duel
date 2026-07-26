@@ -14,6 +14,7 @@ import com.tolstykh.blindduel.game.AngleMath
 import com.tolstykh.blindduel.game.BearingModel
 import com.tolstykh.blindduel.game.BowMath
 import com.tolstykh.blindduel.game.CrateMath
+import com.tolstykh.blindduel.game.DodgeMath
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.FallingCrate
 import com.tolstykh.blindduel.game.GameConstants
@@ -21,6 +22,7 @@ import com.tolstykh.blindduel.game.GameConstants.WeaponConfigs
 import com.tolstykh.blindduel.game.GameSession
 import com.tolstykh.blindduel.game.HealthMath
 import com.tolstykh.blindduel.game.HitTest
+import com.tolstykh.blindduel.game.HitToleranceMath
 import com.tolstykh.blindduel.game.LaserBeamHitAccumulator
 import com.tolstykh.blindduel.game.OutcomeResolver
 import com.tolstykh.blindduel.game.Reload
@@ -182,8 +184,15 @@ class DuelViewModel @Inject constructor(
     // to PISTOL outside practice mode, so a real match always starts on the pistol for free.
     private val startingWeapon = gameSession.practiceStartingWeapon
 
+    /** The match's max health — host-chosen for real matches, adopted by the joiner via
+     * GameMessage.Hello, or the constant default in Solo Test Mode. Computed once; see
+     * GameSession.matchMaxHealth's own doc for its enter/exit-mode reset hygiene. */
+    val matchMaxHealth: Int = gameSession.matchMaxHealth
+
     var uiState by mutableStateOf(
         DuelUiState(
+            myHealth = matchMaxHealth,
+            opponentHealth = matchMaxHealth,
             showAlignmentWarning = !gameSession.isAlignedAtCalibration,
             equippedWeapon = startingWeapon,
             roundsRemaining = WeaponConfigs.forType(startingWeapon).magazineSize,
@@ -286,6 +295,12 @@ class DuelViewModel @Inject constructor(
     var sniperDotOffsetDegrees by mutableStateOf<Float?>(null)
         private set
 
+    /** Dodge button cooldown, 1f = ready to use, 0f = just used — inverse of [reloadProgress]'s
+     * semantics. Kept out of [DuelUiState] for the same recomposition-isolation reason as
+     * [reloadProgress]; ticks in [startTickers]. */
+    var dodgeCooldownProgress by mutableStateOf(1f)
+        private set
+
     val isPracticeMode: Boolean = gameSession.isPracticeMode
 
     private val connection get() = activeGameConnection.current
@@ -304,6 +319,20 @@ class DuelViewModel @Inject constructor(
     private var opponentStepVector = Vector2.ZERO
     private var myHealthZeroAtMs: Long? = null
     private var reloadStartedAtMs: Long? = null
+
+    /** Fog-of-war: timestamp of my own last detected step, feeding [currentHitToleranceDegrees].
+     * Initialized at construction (not left null until the first step) so the decay clock starts
+     * from duel start even if the player never steps at all. */
+    private var myLastStepAtMs: Long = System.currentTimeMillis()
+
+    /** Dodge: locally-timestamped receipt of the opponent's last accepted GameMessage.DodgeEvent
+     * (see [handleIncoming]'s own rate-limiting doc) — null whenever the opponent isn't
+     * currently within their dodge window. */
+    private var opponentDodgeReceivedAtMs: Long? = null
+
+    /** Dodge: when I last tapped the Dodge button — gates [onDodgeTapped] and drives
+     * [dodgeCooldownProgress]. */
+    private var myLastDodgeTapAtMs: Long? = null
 
     /** Built once when a reload starts (see [startReload]) rather than reconstructed every
      * reload-ticker tick — its 4 fields are fixed for the reload's whole lifetime, since
@@ -337,7 +366,10 @@ class DuelViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         motionProvider.stepEvents()
-            .onEach { myStepVector += BearingModel.stepDelta(myHeadingDegrees, GameConstants.STEP_LENGTH_METERS) }
+            .onEach {
+                myStepVector += BearingModel.stepDelta(myHeadingDegrees, GameConstants.STEP_LENGTH_METERS)
+                myLastStepAtMs = System.currentTimeMillis()
+            }
             .launchIn(viewModelScope)
 
         motionProvider.tiltUpdates()
@@ -353,7 +385,7 @@ class DuelViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         viewModelScope.launch {
-            connection.sendMessage(GameMessage.HealthUpdate(GameConstants.MAX_PLAYER_HEALTH))
+            connection.sendMessage(GameMessage.HealthUpdate(matchMaxHealth))
         }
 
         startMotionBroadcastLoop()
@@ -440,6 +472,22 @@ class DuelViewModel @Inject constructor(
                     )
                 } else {
                     sniperDotOffsetDegrees = null
+                }
+
+                val dodgeTappedAt = myLastDodgeTapAtMs
+                if (dodgeTappedAt != null) {
+                    val elapsed = now - dodgeTappedAt
+                    if (elapsed < GameConstants.DODGE_COOLDOWN_MS) {
+                        anyActive = true
+                        dodgeCooldownProgress = (elapsed.toFloat() / GameConstants.DODGE_COOLDOWN_MS).coerceIn(0f, 1f)
+                    } else {
+                        // Cleared (not just left set) once cooldown completes — mirrors
+                        // reloadStartedAtMs/opponentAimHeadingDegrees's own null-when-inactive
+                        // convention, so this branch's body stops running on every tick for the
+                        // rest of the match after a single dodge.
+                        dodgeCooldownProgress = 1f
+                        myLastDodgeTapAtMs = null
+                    }
                 }
 
                 delay(
@@ -620,6 +668,20 @@ class DuelViewModel @Inject constructor(
         }
     }
 
+    /** Taps the Dodge button: cooldown-gated, broadcasts a zero-payload DodgeEvent, and gives
+     * local haptic feedback. Does not itself change anything about my own hit tests — it only
+     * narrows the *opponent's* effective tolerance against me, once they receive it (see
+     * [handleIncoming]'s DodgeEvent branch and [currentHitToleranceDegrees]). */
+    fun onDodgeTapped() {
+        val now = System.currentTimeMillis()
+        val last = myLastDodgeTapAtMs
+        if (last != null && now - last < GameConstants.DODGE_COOLDOWN_MS) return
+        myLastDodgeTapAtMs = now
+        dodgeCooldownProgress = 0f
+        haptics.dodgeFeedback()
+        viewModelScope.launch { connection.sendMessage(GameMessage.DodgeEvent) }
+    }
+
     private fun handleIncoming(message: GameMessage) {
         when (message) {
             is GameMessage.MotionUpdate -> {
@@ -628,9 +690,15 @@ class DuelViewModel @Inject constructor(
             }
             is GameMessage.FireEvent -> onFireReceived(message)
             is GameMessage.HealthUpdate -> {
-                val clamped = message.remainingHealth.coerceIn(0, GameConstants.MAX_PLAYER_HEALTH)
+                val clamped = message.remainingHealth.coerceIn(0, matchMaxHealth)
                 uiState = uiState.copy(opponentHealth = clamped)
                 refreshOutcome()
+            }
+            is GameMessage.DodgeEvent -> {
+                val now = System.currentTimeMillis()
+                if (DodgeMath.shouldAcceptDodgeEvent(now, opponentDodgeReceivedAtMs, GameConstants.DODGE_COOLDOWN_MS)) {
+                    opponentDodgeReceivedAtMs = now
+                }
             }
             else -> Unit
         }
@@ -662,7 +730,7 @@ class DuelViewModel @Inject constructor(
 
         // Damage is always a fixed local lookup, never a peer-supplied value — a modified
         // client reporting an inflated FireEvent can't heal or over-damage either side.
-        val newHealth = HealthMath.applyDamage(uiState.myHealth, config.damage, GameConstants.MAX_PLAYER_HEALTH)
+        val newHealth = HealthMath.applyDamage(uiState.myHealth, config.damage, matchMaxHealth)
         if (newHealth == 0 && myHealthZeroAtMs == null) {
             myHealthZeroAtMs = System.currentTimeMillis()
         }
@@ -758,7 +826,7 @@ class DuelViewModel @Inject constructor(
                     val drag = aimDrag ?: break // player released — exit, let finally send the result
                     val (angle, bearing) = currentAimAndBearing(drag)
                     laserBeamAngleDegrees = angle
-                    accumulator.sample(angle, bearing, config.hitToleranceDegrees)
+                    accumulator.sample(angle, bearing, currentHitToleranceDegrees(config.hitToleranceDegrees))
                     delay(config.laserSampleIntervalMs)
                 }
             } finally {
@@ -824,6 +892,24 @@ class DuelViewModel @Inject constructor(
         }
     }
 
+    /** Thin live-timestamp wrapper around the pure, tested [HitToleranceMath.effectiveToleranceDegrees]
+     * — combines fog-of-war widening (based on my own time-since-last-step) and dodge narrowing
+     * (based on the opponent's last accepted DodgeEvent) into the one effective tolerance every
+     * hit-test call site uses. No logic of its own; see HitToleranceMath's doc for the actual
+     * combination formula and the safety invariant it guarantees. */
+    private fun currentHitToleranceDegrees(baseToleranceDegrees: Float): Float {
+        val now = System.currentTimeMillis()
+        return HitToleranceMath.effectiveToleranceDegrees(
+            baseToleranceDegrees = baseToleranceDegrees,
+            msSinceLastStep = now - myLastStepAtMs,
+            isDodging = DodgeMath.isDodging(now, opponentDodgeReceivedAtMs, GameConstants.DODGE_WINDOW_MS),
+            fogGraceMs = GameConstants.FOG_OF_WAR_DECAY_START_MS,
+            fogFullDecayMs = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+            fogMaxBonusFraction = GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION,
+            dodgeMultiplier = GameConstants.DODGE_TOLERANCE_MULTIPLIER,
+        )
+    }
+
     /** Shared by every fire path: the aim angle and this device's own live bearing estimate to
      * the opponent, from the same drag offset. Not memoized — bearing depends on continuously
      * changing heading/step-vector state, so each call (an instant shot, a bow release, or one
@@ -845,7 +931,7 @@ class DuelViewModel @Inject constructor(
 
         if (tryFireAtCrate(aimAngle, config, config.projectileSpeedDpPerSec)) return
 
-        val hit = HitTest.testHit(aimAngle, bearing, config.hitToleranceDegrees)
+        val hit = HitTest.testHit(aimAngle, bearing, currentHitToleranceDegrees(config.hitToleranceDegrees))
         commitShot(
             weaponType = config.type,
             aimAngleDegrees = aimAngle,
@@ -959,7 +1045,7 @@ class DuelViewModel @Inject constructor(
         if (tryFireAtCrate(aimAngle, config, speed)) return
 
         val travelDurationMs = (GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP / speed * 1000).toLong()
-        val hit = HitTest.testHit(aimAngle, bearing, config.hitToleranceDegrees)
+        val hit = HitTest.testHit(aimAngle, bearing, currentHitToleranceDegrees(config.hitToleranceDegrees))
         // A weak draw is slower end-to-end on the wire too, not just visually — travelDurationMs
         // doubles as both the visual travel time and the network send delay.
         commitShot(WeaponType.BOW, aimAngle, hit, travelDurationMs, sendDelayMs = travelDurationMs)

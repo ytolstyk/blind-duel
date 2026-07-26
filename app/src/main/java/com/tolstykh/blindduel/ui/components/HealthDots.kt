@@ -49,10 +49,11 @@ fun HealthDots(
     remainingHealth: Int,
     modifier: Modifier = Modifier,
     dotColor: Color = MaterialTheme.colorScheme.secondary,
+    maxHealth: Int = GameConstants.MAX_PLAYER_HEALTH,
 ) {
     DotsRow(
         filledCount = remainingHealth,
-        totalCount = GameConstants.MAX_PLAYER_HEALTH,
+        totalCount = maxHealth,
         modifier = modifier,
         dotColor = dotColor,
     )
@@ -67,10 +68,11 @@ fun LabeledHealthDots(
     dotColor: Color,
     modifier: Modifier = Modifier,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    maxHealth: Int = GameConstants.MAX_PLAYER_HEALTH,
 ) {
     Column(modifier = modifier, horizontalAlignment = horizontalAlignment) {
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = dotColor)
         Spacer(modifier = Modifier.height(4.dp))
-        HealthDots(remainingHealth = remainingHealth, dotColor = dotColor)
+        HealthDots(remainingHealth = remainingHealth, dotColor = dotColor, maxHealth = maxHealth)
     }
 }

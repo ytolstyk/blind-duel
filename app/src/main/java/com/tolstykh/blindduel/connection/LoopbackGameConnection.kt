@@ -1,6 +1,7 @@
 package com.tolstykh.blindduel.connection
 
 import com.tolstykh.blindduel.game.GameConstants
+import com.tolstykh.blindduel.game.GameSession
 import com.tolstykh.blindduel.game.HealthMath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,9 @@ import kotlin.random.Random
  * Mode entry point; never used in release builds.
  */
 @Singleton
-class LoopbackGameConnection @Inject constructor() : GameConnection {
+class LoopbackGameConnection @Inject constructor(
+    private val gameSession: GameSession,
+) : GameConnection {
 
     private val scope = CoroutineScope(Dispatchers.Default + Job())
 
@@ -37,7 +40,10 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     private var opponentHeadingDegrees = 180f
     private var opponentStepXMeters = 0f
     private var opponentStepYMeters = 0f
-    private var opponentHealth = GameConstants.MAX_PLAYER_HEALTH
+    // gameSession.matchMaxHealth is guaranteed to be the constant default here — GameSession's
+    // Solo Test entry point (enterPracticeMode) resets it explicitly so a real match's chosen
+    // match length can never leak into practice.
+    private var opponentHealth = gameSession.matchMaxHealth
 
     /** Only one ambient-motion loop may run at a time — each rematch/reconnect must cancel
      * the previous one, otherwise every new session stacks another infinite coroutine. */
@@ -98,7 +104,11 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     }
 
     private fun resetOpponentHealth() {
-        opponentHealth = GameConstants.MAX_PLAYER_HEALTH
+        // Read fresh each call (not the field initializer's construction-time snapshot) since
+        // this Hilt singleton can be constructed before enterPracticeMode() has run for a given
+        // Solo Test session — this is the actual reset point that matters, called from
+        // simulateConnect() and on every CalibrationComplete.
+        opponentHealth = gameSession.matchMaxHealth
     }
 
     private fun startAmbientOpponentMotion() {
@@ -144,7 +154,7 @@ class LoopbackGameConnection @Inject constructor() : GameConnection {
     // simulated, so we apply it directly and echo back the resulting health like a real
     // opponent's own HealthUpdate broadcast would.
     private fun applyHitToOpponent() {
-        opponentHealth = HealthMath.applyDamage(opponentHealth, GameConstants.HIT_DAMAGE, GameConstants.MAX_PLAYER_HEALTH)
+        opponentHealth = HealthMath.applyDamage(opponentHealth, GameConstants.HIT_DAMAGE, gameSession.matchMaxHealth)
         scope.launch {
             delay(SIMULATED_HEALTH_UPDATE_DELAY_MS)
             _incomingMessages.tryEmit(GameMessage.HealthUpdate(opponentHealth))

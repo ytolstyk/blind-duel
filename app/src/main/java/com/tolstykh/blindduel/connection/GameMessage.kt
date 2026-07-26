@@ -11,9 +11,13 @@ import kotlinx.serialization.json.Json
 /** Wire protocol exchanged over the peer-to-peer connection. See the plan's Message Protocol. */
 @Serializable
 sealed interface GameMessage {
+    // maxHealth is the host's chosen match-length value (see MainMenuScreen's picker); the
+    // joiner adopts it (clamped on receipt — see JoinViewModel) and the host's own Hello-
+    // received handler deliberately ignores it, since the joiner never picks one of its own.
+    // Defaults to the standard match length so an unset value is never a plausible-looking lie.
     @Serializable
     @SerialName("hello")
-    data class Hello(val name: String) : GameMessage
+    data class Hello(val name: String, val maxHealth: Int = GameConstants.MAX_PLAYER_HEALTH) : GameMessage
 
     @Serializable
     @SerialName("ready_for_duel")
@@ -60,6 +64,19 @@ sealed interface GameMessage {
     @Serializable
     @SerialName("health_update")
     data class HealthUpdate(val remainingHealth: Int) : GameMessage
+
+    // Zero-payload: the receiver timestamps this on receipt (System.currentTimeMillis()),
+    // never trusting a peer-supplied timestamp, which sidesteps clock skew entirely. The
+    // receiver also enforces its own rate limit on top of the sender's cooldown-gated UI
+    // (DuelViewModel.handleIncoming) — a modified client resending this faster than
+    // GameConstants.DODGE_COOLDOWN_MS is ignored, bounding a spamming peer to the same duty
+    // cycle a well-behaved client produces instead of an open-ended "always dodging" exploit.
+    // The remaining accepted gap (no ack, so a message can arrive after the shot it should have
+    // affected already resolved) is a UX rough edge, not a fairness bug — consistent with this
+    // project's existing 2-peer, no-server-arbitration trust model (see FireEvent above).
+    @Serializable
+    @SerialName("dodge_event")
+    data object DodgeEvent : GameMessage
 
     @Serializable
     @SerialName("rematch_request")

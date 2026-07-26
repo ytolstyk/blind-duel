@@ -52,6 +52,7 @@ import com.tolstykh.blindduel.game.WeaponType
 import com.tolstykh.blindduel.ui.components.CALIBRATION_ALIGNMENT_HINT
 import com.tolstykh.blindduel.ui.components.COMPASS_ACCURACY_HINT
 import com.tolstykh.blindduel.ui.components.DismissibleHintChip
+import com.tolstykh.blindduel.ui.components.DodgeButton
 import com.tolstykh.blindduel.ui.components.KeepScreenOn
 import com.tolstykh.blindduel.ui.components.LabeledAmmoDots
 import com.tolstykh.blindduel.ui.components.LabeledHealthDots
@@ -409,6 +410,7 @@ fun DuelScreen(
             label = "YOU",
             remainingHealth = uiState.myHealth,
             dotColor = DuelAccentEmber,
+            maxHealth = viewModel.matchMaxHealth,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
@@ -427,6 +429,7 @@ fun DuelScreen(
                 remainingHealth = uiState.opponentHealth,
                 dotColor = DuelIncomingDanger,
                 horizontalAlignment = Alignment.End,
+                maxHealth = viewModel.matchMaxHealth,
             )
             if (viewModel.isPracticeMode) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -459,6 +462,13 @@ fun DuelScreen(
                 DuelBowChargeIndicator(viewModel = viewModel)
             }
         }
+
+        DuelDodgeButton(
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp),
+        )
 
         DuelHitIndicator(
             triggerKey = viewModel.hitConfirmedAtMs,
@@ -521,6 +531,17 @@ private fun DuelBowChargeIndicator(viewModel: DuelViewModel, modifier: Modifier 
         modifier = modifier,
         perfectZoneStartFraction = 1f,
         perfectZoneEndFraction = 1f,
+    )
+}
+
+// dodgeCooldownProgress ticks ~20x/sec while cooling down — isolated into its own composable
+// for exactly the same reason as [DuelReloadRing] above.
+@Composable
+private fun DuelDodgeButton(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    DodgeButton(
+        cooldownProgress = viewModel.dodgeCooldownProgress,
+        onTap = viewModel::onDodgeTapped,
+        modifier = modifier,
     )
 }
 

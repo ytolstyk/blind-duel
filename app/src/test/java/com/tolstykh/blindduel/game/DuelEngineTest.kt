@@ -499,3 +499,180 @@ class SniperTelemetryTest {
         assertEquals(15f, dotOffsetDegrees, 0.01f)
     }
 }
+
+class FogOfWarMathTest {
+    @Test
+    fun `tolerance is unchanged at or under the grace period`() {
+        assertEquals(
+            20f,
+            FogOfWarMath.widenedToleranceDegrees(
+                baseToleranceDegrees = 20f, msSinceLastStep = 2500L, graceMs = 2500L, fullDecayMs = 9000L, maxBonusFraction = 0.5f,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            20f,
+            FogOfWarMath.widenedToleranceDegrees(
+                baseToleranceDegrees = 20f, msSinceLastStep = 0L, graceMs = 2500L, fullDecayMs = 9000L, maxBonusFraction = 0.5f,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `tolerance grows proportionally and linearly through the decay window`() {
+        // Midpoint of the 2500..9000 decay window (5750) should be half the max bonus:
+        // 20 * (1 + 0.5 * 0.5) = 25.
+        assertEquals(
+            25f,
+            FogOfWarMath.widenedToleranceDegrees(
+                baseToleranceDegrees = 20f, msSinceLastStep = 5750L, graceMs = 2500L, fullDecayMs = 9000L, maxBonusFraction = 0.5f,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `tolerance caps at base times 1 plus maxBonusFraction at or after full decay`() {
+        assertEquals(
+            30f,
+            FogOfWarMath.widenedToleranceDegrees(
+                baseToleranceDegrees = 20f, msSinceLastStep = 9000L, graceMs = 2500L, fullDecayMs = 9000L, maxBonusFraction = 0.5f,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            30f,
+            FogOfWarMath.widenedToleranceDegrees(
+                baseToleranceDegrees = 20f, msSinceLastStep = 100_000L, graceMs = 2500L, fullDecayMs = 9000L, maxBonusFraction = 0.5f,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `degenerate fullDecayMs equal to graceMs does not throw or return NaN`() {
+        val result = FogOfWarMath.widenedToleranceDegrees(
+            baseToleranceDegrees = 20f, msSinceLastStep = 5000L, graceMs = 2500L, fullDecayMs = 2500L, maxBonusFraction = 0.5f,
+        )
+        assertFalse(result.isNaN())
+    }
+}
+
+class DodgeMathTest {
+    @Test
+    fun `isDodging is true just inside the window and false at or after it`() {
+        assertTrue(DodgeMath.isDodging(nowMs = 1599L, dodgeReceivedAtMs = 1000L, windowMs = 600L))
+        assertFalse(DodgeMath.isDodging(nowMs = 1600L, dodgeReceivedAtMs = 1000L, windowMs = 600L))
+        assertFalse(DodgeMath.isDodging(nowMs = 2000L, dodgeReceivedAtMs = 1000L, windowMs = 600L))
+    }
+
+    @Test
+    fun `isDodging is false when no dodge has been received`() {
+        assertFalse(DodgeMath.isDodging(nowMs = 1000L, dodgeReceivedAtMs = null, windowMs = 600L))
+    }
+
+    @Test
+    fun `narrowedToleranceDegrees multiplies including 0 and 1 edge cases`() {
+        assertEquals(10f, DodgeMath.narrowedToleranceDegrees(20f, 0.5f), 0.001f)
+        assertEquals(0f, DodgeMath.narrowedToleranceDegrees(20f, 0f), 0.001f)
+        assertEquals(20f, DodgeMath.narrowedToleranceDegrees(20f, 1f), 0.001f)
+    }
+
+    @Test
+    fun `shouldAcceptDodgeEvent accepts the first event and rejects a spam-fast resend`() {
+        assertTrue(DodgeMath.shouldAcceptDodgeEvent(nowMs = 1000L, lastAcceptedAtMs = null, cooldownMs = 2500L))
+        assertFalse(DodgeMath.shouldAcceptDodgeEvent(nowMs = 1000L, lastAcceptedAtMs = 500L, cooldownMs = 2500L))
+    }
+
+    @Test
+    fun `shouldAcceptDodgeEvent accepts again once the cooldown has elapsed`() {
+        assertFalse(DodgeMath.shouldAcceptDodgeEvent(nowMs = 2999L, lastAcceptedAtMs = 500L, cooldownMs = 2500L))
+        assertTrue(DodgeMath.shouldAcceptDodgeEvent(nowMs = 3000L, lastAcceptedAtMs = 500L, cooldownMs = 2500L))
+    }
+
+    @Test
+    fun `shouldAcceptDodgeEvent bounds a spamming peer to the legitimate duty cycle`() {
+        // A modified peer resending every 100ms should still only be accepted once per
+        // cooldown window, not on every attempt — this is the invariant that keeps a spammed
+        // DodgeEvent from producing a permanently-"dodging" opponent.
+        var lastAccepted: Long? = null
+        var acceptedCount = 0
+        var now = 0L
+        while (now <= 10_000L) {
+            if (DodgeMath.shouldAcceptDodgeEvent(now, lastAccepted, cooldownMs = 2500L)) {
+                lastAccepted = now
+                acceptedCount++
+            }
+            now += 100L
+        }
+        // 10s / 2.5s cooldown = at most 5 legitimate accepts, regardless of 100 spam attempts.
+        assertTrue("expected a bounded accept count, got $acceptedCount", acceptedCount <= 5)
+    }
+}
+
+class HitToleranceMathTest {
+    @Test
+    fun `not dodging returns the fog-widened value unchanged`() {
+        assertEquals(
+            30f,
+            HitToleranceMath.effectiveToleranceDegrees(
+                baseToleranceDegrees = 20f,
+                msSinceLastStep = 9000L,
+                isDodging = false,
+                fogGraceMs = 2500L,
+                fogFullDecayMs = 9000L,
+                fogMaxBonusFraction = 0.5f,
+                dodgeMultiplier = 0.5f,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `sniper base at max fog while dodging matches the worked example`() {
+        // 8 * 1.5 (max fog) * 0.5 (dodge) = 6.
+        assertEquals(
+            6f,
+            HitToleranceMath.effectiveToleranceDegrees(
+                baseToleranceDegrees = GameConstants.WeaponConfigs.SNIPER.hitToleranceDegrees,
+                msSinceLastStep = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                isDodging = true,
+                fogGraceMs = GameConstants.FOG_OF_WAR_DECAY_START_MS,
+                fogFullDecayMs = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                fogMaxBonusFraction = GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION,
+                dodgeMultiplier = GameConstants.DODGE_TOLERANCE_MULTIPLIER,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `dodging is never worse than not dodging, at max fog, for every weapon`() {
+        // The core safety invariant round-1 review found broken: a dodged shot must never be
+        // easier to land than an un-dodged one, no matter how long the fog has been decaying.
+        WeaponType.entries.forEach { type ->
+            val base = GameConstants.WeaponConfigs.forType(type).hitToleranceDegrees
+            val undodged = HitToleranceMath.effectiveToleranceDegrees(
+                baseToleranceDegrees = base,
+                msSinceLastStep = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                isDodging = false,
+                fogGraceMs = GameConstants.FOG_OF_WAR_DECAY_START_MS,
+                fogFullDecayMs = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                fogMaxBonusFraction = GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION,
+                dodgeMultiplier = GameConstants.DODGE_TOLERANCE_MULTIPLIER,
+            )
+            val dodged = HitToleranceMath.effectiveToleranceDegrees(
+                baseToleranceDegrees = base,
+                msSinceLastStep = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                isDodging = true,
+                fogGraceMs = GameConstants.FOG_OF_WAR_DECAY_START_MS,
+                fogFullDecayMs = GameConstants.FOG_OF_WAR_DECAY_FULL_MS,
+                fogMaxBonusFraction = GameConstants.FOG_OF_WAR_MAX_BONUS_FRACTION,
+                dodgeMultiplier = GameConstants.DODGE_TOLERANCE_MULTIPLIER,
+            )
+            assertTrue("$type: dodged ($dodged) must be < undodged ($undodged)", dodged < undodged)
+            assertTrue("$type: dodged ($dodged) must be < base ($base)", dodged < base)
+        }
+    }
+}

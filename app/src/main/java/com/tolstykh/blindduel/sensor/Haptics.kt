@@ -20,4 +20,10 @@ class Haptics @Inject constructor(@ApplicationContext context: Context) {
     fun hitFeedback() {
         vibrator.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
     }
+
+    /** Short/light pulse for a dodge activation — distinct from [hitFeedback]'s longer buzz so
+     * the two never feel the same. */
+    fun dodgeFeedback() {
+        vibrator.vibrate(VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
 }
