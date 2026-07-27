@@ -65,6 +65,9 @@ import com.tolstykh.blindduel.ui.theme.DuelCrateAccent
 import com.tolstykh.blindduel.ui.theme.DuelIncomingDanger
 import com.tolstykh.blindduel.ui.theme.DuelIncomingDangerDim
 import com.tolstykh.blindduel.ui.theme.DuelLaserBeam
+import com.tolstykh.blindduel.ui.theme.headColor
+import com.tolstykh.blindduel.ui.theme.paletteColor
+import com.tolstykh.blindduel.ui.theme.tailColor
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -226,6 +229,7 @@ fun DuelScreen(
             fireTriggerKey = outgoingShot?.firedAtMs,
             hitTriggerKey = lastHitAtMs,
             crateTriggerKey = crateExplosion?.triggeredAtMs,
+            shakeIntensityFraction = uiState.shakeIntensityFraction,
             modifier = Modifier.fillMaxSize(),
         ) {
             DuelParticleBackdrop(
@@ -234,6 +238,7 @@ fun DuelScreen(
                 projectileProgress = projectileProgress,
                 incomingShot = incomingShot,
                 incomingProjectileProgress = incomingProjectileProgress,
+                particleColor = uiState.particleTheme.paletteColor,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -276,8 +281,8 @@ fun DuelScreen(
                             distancePx = projectileProgress.value * outgoingDistancePx,
                             center = center,
                             radiusPx = projectileRadiusPx,
-                            headColor = DuelAccentViolet,
-                            tailColor = DuelAccentVioletDim,
+                            headColor = uiState.trailTheme.headColor,
+                            tailColor = uiState.trailTheme.tailColor,
                             travelPhase = projectileProgress.value,
                             jitterDegrees = outgoingPelletJitters,
                         )
@@ -287,8 +292,8 @@ fun DuelScreen(
                             distancePx = projectileProgress.value * outgoingDistancePx,
                             center = center,
                             radiusPx = projectileRadiusPx,
-                            headColor = DuelAccentViolet,
-                            tailColor = DuelAccentVioletDim,
+                            headColor = uiState.trailTheme.headColor,
+                            tailColor = uiState.trailTheme.tailColor,
                             travelPhase = projectileProgress.value,
                         )
                     }
@@ -641,6 +646,7 @@ private fun DuelParticleBackdrop(
     projectileProgress: Animatable<Float, *>,
     incomingShot: IncomingShot?,
     incomingProjectileProgress: Animatable<Float, *>,
+    particleColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val travelDistancePx = with(LocalDensity.current) { GameConstants.PROJECTILE_VISUAL_TRAVEL_DISTANCE_DP.dp.toPx() }
@@ -648,6 +654,7 @@ private fun DuelParticleBackdrop(
     ParticleField(
         modifier = modifier,
         deviceTilt = viewModel.deviceTilt,
+        particleColor = particleColor,
         activeProjectileOffset = {
             when {
                 // Uses this shot's own maxDistanceDp (shorter for a crate-seeking shot) rather
@@ -683,6 +690,7 @@ private fun DuelShakeLayer(
     fireTriggerKey: Long?,
     hitTriggerKey: Long?,
     crateTriggerKey: Long?,
+    shakeIntensityFraction: Float,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -690,9 +698,9 @@ private fun DuelShakeLayer(
     val hitShake = remember { Animatable(0f) }
     val crateShake = remember { Animatable(0f) }
     val density = LocalDensity.current
-    val fireMagnitudePx = with(density) { GameConstants.CAMERA_SHAKE_FIRE_MAGNITUDE_DP.dp.toPx() }
-    val hitMagnitudePx = with(density) { GameConstants.CAMERA_SHAKE_HIT_MAGNITUDE_DP.dp.toPx() }
-    val crateMagnitudePx = with(density) { GameConstants.CRATE_EXPLOSION_SHAKE_MAGNITUDE_DP.dp.toPx() }
+    val fireMagnitudePx = with(density) { GameConstants.CAMERA_SHAKE_FIRE_MAGNITUDE_DP.dp.toPx() } * shakeIntensityFraction
+    val hitMagnitudePx = with(density) { GameConstants.CAMERA_SHAKE_HIT_MAGNITUDE_DP.dp.toPx() } * shakeIntensityFraction
+    val crateMagnitudePx = with(density) { GameConstants.CRATE_EXPLOSION_SHAKE_MAGNITUDE_DP.dp.toPx() } * shakeIntensityFraction
 
     LaunchedEffect(fireTriggerKey) {
         if (fireTriggerKey != null) fireShake.triggerShakePulse()

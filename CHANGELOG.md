@@ -23,6 +23,9 @@
 - Destroying a weapon crate now requires actually shooting it: firing a shot whose aim ray passes near the crate spends a round and, once the projectile reaches it, blows it up (screen shake, particle burst, color flash) before granting the new weapon — replacing the old "release your drag near the crate" free-grab.
 - Each weapon's aim line now previews its actual firing behavior instead of a plain line for every weapon: shotgun shows a widening cone, sniper shows a target reticle at the tip, bow shows an arrowhead, and laser (which fires immediately on touch) shows only its full sweeping beam.
 - Taking a hit now sprays a directional burst of debris particles off the side of the character facing the incoming shot, and the incoming projectile now visibly shrinks/fades into the character as it arrives instead of just popping on contact.
+- New Settings screen sections: Sound volume, Haptic intensity, and Screen shake intensity sliders (0-100%, shake up to 200%), plus Trail theme (Violet/Ember/Mint, recolors your own outgoing projectile trail) and Particle theme (Classic/Dusk/Neon, recolors the ambient star/dust backdrop) pickers. All persist across launches and apply live if changed mid-duel.
+- Added a distinct short haptic pulse on firing, and a "getting close" haptic pulse when the estimated distance to the opponent crosses into a nearer zone (based on the existing dead-reckoning step model) — both scaled by the new haptic intensity setting.
+- Weapon fire sound cues now have a real volume control, and landing/missing a shot now plays a distinct hit or miss tone (previously only firing had a sound).
 
 ### Changed
 - Moved the match-length picker and the debug-only Solo Test entry point (starting weapon, crate toggle) off the main menu and onto the Create screen, so the main menu stays to just name entry and Create/Join.

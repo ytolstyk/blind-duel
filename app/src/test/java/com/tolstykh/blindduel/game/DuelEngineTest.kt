@@ -121,6 +121,73 @@ class BearingModelTest {
         assertFalse(BearingModel.isAlignedFaceToFace(0f, 0f, 45f))
         assertFalse(BearingModel.isAlignedFaceToFace(0f, 90f, 45f))
     }
+
+    @Test
+    fun `estimatedDistanceMeters returns the assumed distance before any steps`() {
+        val initial = BearingModel.computeInitialOpponentPosition(0f, 3f)
+        val distance = BearingModel.estimatedDistanceMeters(
+            initialOpponentPosition = initial,
+            opponentStepVector = Vector2.ZERO,
+            myStepVector = Vector2.ZERO,
+        )
+        assertEquals(3f, distance, 0.01f)
+    }
+
+    @Test
+    fun `estimatedDistanceMeters shrinks as either side steps toward the other`() {
+        val initial = BearingModel.computeInitialOpponentPosition(0f, 3f) // opponent 3m ahead
+        val opponentStepsCloser = BearingModel.estimatedDistanceMeters(
+            initialOpponentPosition = initial,
+            opponentStepVector = Vector2(0f, -1f),
+            myStepVector = Vector2.ZERO,
+        )
+        assertEquals(2f, opponentStepsCloser, 0.01f)
+
+        val iStepCloser = BearingModel.estimatedDistanceMeters(
+            initialOpponentPosition = initial,
+            opponentStepVector = Vector2.ZERO,
+            myStepVector = Vector2(0f, 1f),
+        )
+        assertEquals(2f, iStepCloser, 0.01f)
+    }
+
+    @Test
+    fun `estimatedDistanceMeters is zero when both positions coincide`() {
+        val initial = BearingModel.computeInitialOpponentPosition(0f, 3f)
+        val distance = BearingModel.estimatedDistanceMeters(
+            initialOpponentPosition = initial,
+            opponentStepVector = Vector2.ZERO,
+            myStepVector = Vector2(0f, 3f),
+        )
+        assertEquals(0f, distance, 0.01f)
+    }
+}
+
+class ProximityMathTest {
+    @Test
+    fun `zoneFor classifies distance against the two thresholds`() {
+        assertEquals(ProximityZone.FAR, ProximityMath.zoneFor(5f, nearMeters = 2f, veryNearMeters = 1f))
+        assertEquals(ProximityZone.NEAR, ProximityMath.zoneFor(1.5f, nearMeters = 2f, veryNearMeters = 1f))
+        assertEquals(ProximityZone.VERY_NEAR, ProximityMath.zoneFor(0.5f, nearMeters = 2f, veryNearMeters = 1f))
+        // Boundary values fall into the stricter (closer) zone.
+        assertEquals(ProximityZone.NEAR, ProximityMath.zoneFor(2f, nearMeters = 2f, veryNearMeters = 1f))
+        assertEquals(ProximityZone.VERY_NEAR, ProximityMath.zoneFor(1f, nearMeters = 2f, veryNearMeters = 1f))
+    }
+
+    @Test
+    fun `crossedIntoCloserZone fires only on a transition into a stricter zone`() {
+        assertTrue(ProximityMath.crossedIntoCloserZone(ProximityZone.FAR, ProximityZone.NEAR))
+        assertTrue(ProximityMath.crossedIntoCloserZone(ProximityZone.NEAR, ProximityZone.VERY_NEAR))
+        assertTrue(ProximityMath.crossedIntoCloserZone(ProximityZone.FAR, ProximityZone.VERY_NEAR))
+    }
+
+    @Test
+    fun `crossedIntoCloserZone does not fire while staying put or retreating`() {
+        assertFalse(ProximityMath.crossedIntoCloserZone(ProximityZone.FAR, ProximityZone.FAR))
+        assertFalse(ProximityMath.crossedIntoCloserZone(ProximityZone.NEAR, ProximityZone.NEAR))
+        assertFalse(ProximityMath.crossedIntoCloserZone(ProximityZone.VERY_NEAR, ProximityZone.NEAR))
+        assertFalse(ProximityMath.crossedIntoCloserZone(ProximityZone.NEAR, ProximityZone.FAR))
+    }
 }
 
 class HitTestTest {

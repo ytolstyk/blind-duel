@@ -112,6 +112,40 @@ object BearingModel {
         val diff = AngleMath.normalizeSigned(myBaselineHeadingDegrees - opponentBaselineHeadingDegrees)
         return abs(abs(diff) - 180f) <= toleranceDegrees
     }
+
+    /** Straight-line estimated distance to the opponent, in meters — the same dead-reckoning
+     * inputs [computeBearingToOpponentOnScreen] already uses for bearing, just returning the
+     * missing scalar magnitude of that same relative-position vector instead of an angle. */
+    fun estimatedDistanceMeters(
+        initialOpponentPosition: Vector2,
+        opponentStepVector: Vector2,
+        myStepVector: Vector2,
+    ): Float {
+        val relative = (initialOpponentPosition + opponentStepVector) - myStepVector
+        return hypot(relative.x, relative.y)
+    }
+}
+
+/** Proximity zones for the "getting close" haptic — stricter (closer) zones have a higher
+ * ordinal, which [ProximityMath.crossedIntoCloserZone] relies on directly. */
+enum class ProximityZone { FAR, NEAR, VERY_NEAR }
+
+/** Classifies [BearingModel.estimatedDistanceMeters] into a [ProximityZone] and detects the
+ * zone-crossing that should trigger a proximity haptic. Deliberately stateless: the caller
+ * (DuelViewModel) owns the "last zone" and "last trigger time" state across ticks, since a pure
+ * function has nowhere to remember either between calls. */
+object ProximityMath {
+    fun zoneFor(distanceMeters: Float, nearMeters: Float, veryNearMeters: Float): ProximityZone = when {
+        distanceMeters <= veryNearMeters -> ProximityZone.VERY_NEAR
+        distanceMeters <= nearMeters -> ProximityZone.NEAR
+        else -> ProximityZone.FAR
+    }
+
+    /** True only on a transition into a stricter (closer) zone — never on entering FAR, and
+     * never while remaining in the same zone — so retreating and re-approaching the same
+     * boundary can pulse again, but hovering right at it can't spam every tick. */
+    fun crossedIntoCloserZone(previous: ProximityZone, current: ProximityZone): Boolean =
+        current.ordinal > previous.ordinal
 }
 
 /** Converts an on-screen aim drag into a phone-relative angle and tests it against a bearing. */

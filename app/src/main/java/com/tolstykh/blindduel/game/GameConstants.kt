@@ -134,6 +134,31 @@ object GameConstants {
     const val CAMERA_SHAKE_HIT_CYCLES_X = 4.55f
     const val CAMERA_SHAKE_HIT_CYCLES_Y = 6.3f
 
+    // Proximity haptic — a pulse when the estimated opponent distance (BearingModel.
+    // estimatedDistanceMeters) crosses into a stricter "getting close" zone (see
+    // ProximityMath). The crossing-edge trigger plus this retrigger floor together stop it
+    // from buzzing continuously while hovering right at a zone boundary.
+    const val PROXIMITY_HAPTIC_NEAR_METERS = 2.0f
+    const val PROXIMITY_HAPTIC_VERY_NEAR_METERS = 1.0f
+    const val PROXIMITY_HAPTIC_MIN_RETRIGGER_MS = 4_000L
+    const val PROXIMITY_HAPTIC_DURATION_MS = 40L
+    const val PROXIMITY_HAPTIC_AMPLITUDE = 130
+
+    // Haptic durations/amplitudes — explicit amplitudes (rather than
+    // VibrationEffect.DEFAULT_AMPLITUDE) so a runtime haptic-intensity setting can scale them;
+    // see Haptics.kt.
+    const val HAPTIC_HIT_DURATION_MS = 150L
+    const val HAPTIC_HIT_AMPLITUDE = 255
+    const val HAPTIC_DODGE_DURATION_MS = 60L
+    const val HAPTIC_DODGE_AMPLITUDE = 180
+    const val HAPTIC_FIRE_DURATION_MS = 25L
+    const val HAPTIC_FIRE_AMPLITUDE = 120
+
+    // Weapon-sound hit/miss tone durations (WeaponSoundPlayer) — fire's own per-weapon
+    // durations are private constants there; these two are shared across all weapons.
+    const val TONE_HIT_DURATION_MS = 150
+    const val TONE_MISS_DURATION_MS = 90
+
     // Sensors / networking
     const val HEADING_BROADCAST_INTERVAL_MS = 120L
     const val CALIBRATION_COUNTDOWN_SECONDS = 3

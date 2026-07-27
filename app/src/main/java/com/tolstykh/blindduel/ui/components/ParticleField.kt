@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.ui.theme.DuelParticle
@@ -49,12 +50,15 @@ private data class Particle(
  * draw call (not read eagerly by the caller) — a projectile in flight changes every animation
  * frame, and reading it only inside this Canvas's draw phase keeps that churn from forcing a
  * recomposition of whatever composable is passing it in. A non-null result (relative to canvas
- * center) pushes nearby dust away from that point.
+ * center) pushes nearby dust away from that point. [particleColor] is a Settings-screen cosmetic
+ * choice (see data.ParticleTheme and its ui.theme.paletteColor mapping); defaults to the
+ * original hardcoded color.
  */
 @Composable
 fun ParticleField(
     modifier: Modifier = Modifier,
     deviceTilt: Offset = Offset.Zero,
+    particleColor: Color = DuelParticle,
     activeProjectileOffset: () -> Offset? = { null },
 ) {
     val particles = remember {
@@ -115,7 +119,7 @@ fun ParticleField(
         val projectilePosition = activeProjectileOffset()?.let {
             Offset(size.width / 2f, size.height / 2f) + it
         }
-        drawParticles(particles, twinklePhase, fallPhase, deviceTilt, swirlEnergy, projectilePosition)
+        drawParticles(particles, twinklePhase, fallPhase, deviceTilt, swirlEnergy, projectilePosition, particleColor)
     }
 }
 
@@ -126,6 +130,7 @@ private fun DrawScope.drawParticles(
     tilt: Offset,
     swirlEnergy: Float,
     projectilePosition: Offset?,
+    particleColor: Color,
 ) {
     val parallax = Offset(
         x = -tilt.x / GRAVITY_MS2 * GameConstants.STAR_PARALLAX_FACTOR_PX,
@@ -163,7 +168,7 @@ private fun DrawScope.drawParticles(
             position
         }
 
-        drawCircle(color = DuelParticle.copy(alpha = alpha), radius = particle.radiusPx, center = displayPosition)
+        drawCircle(color = particleColor.copy(alpha = alpha), radius = particle.radiusPx, center = displayPosition)
     }
 }
 

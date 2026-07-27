@@ -10,6 +10,9 @@ import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.connection.GameMessage
 import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
+import com.tolstykh.blindduel.data.AppPreferencesRepository
+import com.tolstykh.blindduel.data.ParticleTheme
+import com.tolstykh.blindduel.data.TrailTheme
 import com.tolstykh.blindduel.game.AngleMath
 import com.tolstykh.blindduel.game.BearingModel
 import com.tolstykh.blindduel.game.BowMath
@@ -25,6 +28,8 @@ import com.tolstykh.blindduel.game.HitTest
 import com.tolstykh.blindduel.game.HitToleranceMath
 import com.tolstykh.blindduel.game.LaserBeamHitAccumulator
 import com.tolstykh.blindduel.game.OutcomeResolver
+import com.tolstykh.blindduel.game.ProximityMath
+import com.tolstykh.blindduel.game.ProximityZone
 import com.tolstykh.blindduel.game.Reload
 import com.tolstykh.blindduel.game.Vector2
 import com.tolstykh.blindduel.game.WeaponConfig
@@ -37,9 +42,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.math.hypot
 import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -66,6 +73,12 @@ data class DuelUiState(
     // Same trigger-flash pattern as damageFlash, just themed for a destroyed crate rather than
     // a landed opponent hit — see DuelViewModel.triggerCrateExplosion.
     val crateExplosionFlash: Boolean = false,
+    // The next three are Settings-screen choices, read once from AppPreferencesRepository and
+    // re-emitted only if the player changes them mid-duel — low-frequency, unlike reloadProgress
+    // below, so no recomposition-isolation concern.
+    val trailTheme: TrailTheme = AppPreferencesRepository.DEFAULT_TRAIL_THEME,
+    val particleTheme: ParticleTheme = AppPreferencesRepository.DEFAULT_PARTICLE_THEME,
+    val shakeIntensityFraction: Float = AppPreferencesRepository.DEFAULT_SHAKE_INTENSITY / 100f,
 ) {
     // Derived, not stored: startReload()/completeReload() always empty/refill roundsRemaining
     // in the same call that starts/ends a reload, so this can never desync from it. Flips at
@@ -177,6 +190,7 @@ class DuelViewModel @Inject constructor(
     private val motionProvider: MotionProvider,
     private val haptics: Haptics,
     private val weaponSoundPlayer: WeaponSoundPlayer,
+    private val appPrefs: AppPreferencesRepository,
 ) : ViewModel() {
 
     // Solo Test Mode lets the player pick a starting weapon from the Create screen so any weapon can
@@ -355,6 +369,15 @@ class DuelViewModel @Inject constructor(
 
     private var nextCrateId = 0L
 
+    /** Haptic-intensity fraction from Settings — write-only-consumed by [haptics] calls, never
+     * read by Compose, so it lives here rather than in [DuelUiState]. */
+    private var hapticIntensityFraction = AppPreferencesRepository.DEFAULT_HAPTIC_INTENSITY / 100f
+
+    /** Proximity-haptic zone-crossing state (see [ProximityMath]) — a pure function has nowhere
+     * to remember either of these between ticks, so [startTickers] owns them. */
+    private var lastProximityZone = ProximityZone.FAR
+    private var lastProximityHapticAtMs: Long? = null
+
     init {
         motionProvider.headingUpdates()
             .onEach { sample ->
@@ -382,6 +405,27 @@ class DuelViewModel @Inject constructor(
 
         connection.sessionEndedEvents()
             .onEach { sessionEnded = true }
+            .launchIn(viewModelScope)
+
+        appPrefs.soundVolume
+            // ToneGenerator release()/construct() talks to the audio HAL and can block for a
+            // few ms — kept off Dispatchers.Main.immediate (see WeaponSoundPlayer.setVolume's
+            // doc) so it can't stall the Duel screen's launch, which already has calibration
+            // teardown, sensor registration, and connection bring-up competing for the main thread.
+            .onEach { weaponSoundPlayer.setVolume(it / 100f) }
+            .flowOn(Dispatchers.Default)
+            .launchIn(viewModelScope)
+        appPrefs.hapticIntensity
+            .onEach { hapticIntensityFraction = it / 100f }
+            .launchIn(viewModelScope)
+        appPrefs.shakeIntensity
+            .onEach { uiState = uiState.copy(shakeIntensityFraction = it / 100f) }
+            .launchIn(viewModelScope)
+        appPrefs.trailTheme
+            .onEach { uiState = uiState.copy(trailTheme = it) }
+            .launchIn(viewModelScope)
+        appPrefs.particleTheme
+            .onEach { uiState = uiState.copy(particleTheme = it) }
             .launchIn(viewModelScope)
 
         viewModelScope.launch {
@@ -474,6 +518,8 @@ class DuelViewModel @Inject constructor(
                     sniperDotOffsetDegrees = null
                 }
 
+                updateProximityHaptic(now)
+
                 val dodgeTappedAt = myLastDodgeTapAtMs
                 if (dodgeTappedAt != null) {
                     val elapsed = now - dodgeTappedAt
@@ -495,6 +541,30 @@ class DuelViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** Proximity haptic — always computed on every [startTickers] tick (not gated into that
+     * loop's `anyActive` flag), since a 250ms idle-poll granularity is plenty fine against the
+     * 4s retrigger floor and the meters-scale zone thresholds below. */
+    private fun updateProximityHaptic(now: Long) {
+        val distance = BearingModel.estimatedDistanceMeters(
+            initialOpponentPosition = initialOpponentPosition,
+            opponentStepVector = opponentStepVector,
+            myStepVector = myStepVector,
+        )
+        val zone = ProximityMath.zoneFor(
+            distanceMeters = distance,
+            nearMeters = GameConstants.PROXIMITY_HAPTIC_NEAR_METERS,
+            veryNearMeters = GameConstants.PROXIMITY_HAPTIC_VERY_NEAR_METERS,
+        )
+        val readyToRetrigger = lastProximityHapticAtMs
+            ?.let { now - it >= GameConstants.PROXIMITY_HAPTIC_MIN_RETRIGGER_MS }
+            ?: true
+        if (ProximityMath.crossedIntoCloserZone(lastProximityZone, zone) && readyToRetrigger) {
+            haptics.proximityFeedback(hapticIntensityFraction)
+            lastProximityHapticAtMs = now
+        }
+        lastProximityZone = zone
     }
 
     private fun startCrateSpawnLoop() {
@@ -678,7 +748,7 @@ class DuelViewModel @Inject constructor(
         if (last != null && now - last < GameConstants.DODGE_COOLDOWN_MS) return
         myLastDodgeTapAtMs = now
         dodgeCooldownProgress = 0f
-        haptics.dodgeFeedback()
+        haptics.dodgeFeedback(hapticIntensityFraction)
         viewModelScope.launch { connection.sendMessage(GameMessage.DodgeEvent) }
     }
 
@@ -744,7 +814,7 @@ class DuelViewModel @Inject constructor(
             // lands — health/outcome resolution above stays immediate and unaffected.
             delay(travelDurationMs)
             lastHitAtMs = System.currentTimeMillis()
-            haptics.hitFeedback()
+            haptics.hitFeedback(hapticIntensityFraction)
             uiState = uiState.copy(damageFlash = true, damageDirectionDegrees = bearing)
             delay(GameConstants.DAMAGE_FLASH_DURATION_MS)
             uiState = uiState.copy(damageFlash = false)
@@ -818,6 +888,7 @@ class DuelViewModel @Inject constructor(
         // interact badly regardless of how either is retuned later.
         uiState = uiState.copy(roundsRemaining = 0)
         weaponSoundPlayer.playFireSound(WeaponType.LASER)
+        haptics.fireFeedback(hapticIntensityFraction)
         laserBeamJob = viewModelScope.launch {
             val accumulator = LaserBeamHitAccumulator()
             val endAt = System.currentTimeMillis() + config.laserBeamDurationMs
@@ -857,7 +928,12 @@ class DuelViewModel @Inject constructor(
                 ),
             )
         }
-        if (accumulator.registeredHit) hitConfirmedAtMs = System.currentTimeMillis()
+        if (accumulator.registeredHit) {
+            hitConfirmedAtMs = System.currentTimeMillis()
+            weaponSoundPlayer.playHitSound()
+        } else {
+            weaponSoundPlayer.playMissSound()
+        }
         startReload(System.currentTimeMillis())
     }
 
@@ -999,6 +1075,7 @@ class DuelViewModel @Inject constructor(
             offsetDp = crateOffsetDp,
         )
         weaponSoundPlayer.playFireSound(config.type)
+        haptics.fireFeedback(hapticIntensityFraction)
         // Spend the round on the weapon that fired, then immediately equip the crate's weapon —
         // back-to-back with no suspension in between, so there is no window for another shot to
         // observe (or be clobbered by) an in-between state. See equipWeaponFromCrate's own doc for
@@ -1071,6 +1148,7 @@ class DuelViewModel @Inject constructor(
             wasHit = hit,
         )
         weaponSoundPlayer.playFireSound(weaponType)
+        haptics.fireFeedback(hapticIntensityFraction)
         spendRound(now)
 
         viewModelScope.launch {
@@ -1082,7 +1160,7 @@ class DuelViewModel @Inject constructor(
             )
         }
 
-        if (hit) scheduleHitConfirmation(travelDurationMs)
+        if (hit) scheduleHitConfirmation(travelDurationMs) else weaponSoundPlayer.playMissSound()
     }
 
     private fun scheduleHitConfirmation(travelDurationMs: Long) {
@@ -1091,6 +1169,7 @@ class DuelViewModel @Inject constructor(
             // hitConfirmedAtMs's doc for why (a rapid-fire burst can overwrite that slot).
             delay(travelDurationMs)
             hitConfirmedAtMs = System.currentTimeMillis()
+            weaponSoundPlayer.playHitSound()
         }
     }
 
