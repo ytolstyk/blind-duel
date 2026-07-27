@@ -924,7 +924,7 @@ class DuelViewModel @Inject constructor(
                 GameMessage.FireEvent(
                     hit = accumulator.registeredHit,
                     weaponType = WeaponType.LASER,
-                    travelDurationMs = GameConstants.LASER_INCOMING_TRAVEL_DURATION_MS,
+                    travelDurationMs = WeaponConfigs.LASER.incomingTravelDurationMs,
                 ),
             )
         }

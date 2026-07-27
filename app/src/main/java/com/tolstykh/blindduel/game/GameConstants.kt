@@ -351,6 +351,7 @@ object GameConstants {
             isLoud = true,
             projectileSpeedDpPerSec = PROJECTILE_SPEED_DP_PER_SEC,
             projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+            incomingTravelDurationMs = PROJECTILE_TRAVEL_DURATION_MS,
         )
         val SHOTGUN = WeaponConfig(
             type = WeaponType.SHOTGUN,
@@ -365,6 +366,7 @@ object GameConstants {
             isLoud = true,
             projectileSpeedDpPerSec = SHOTGUN_PROJECTILE_SPEED_DP_PER_SEC,
             projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+            incomingTravelDurationMs = PROJECTILE_TRAVEL_DURATION_MS,
         )
         val BOW = WeaponConfig(
             type = WeaponType.BOW,
@@ -384,6 +386,11 @@ object GameConstants {
             // rather than silently working with a misleading number.
             projectileSpeedDpPerSec = 0f,
             projectileOffscreenTravelTimeMs = 0L,
+            // Only a fallback for contexts with no real drag gesture to derive pull strength
+            // from (Solo Test Mode's simulated opponent, see LoopbackGameConnection) — a real
+            // bow shot's incoming timing always comes from DuelViewModel.fireBow's per-shot
+            // pull-strength calculation instead, never from this constant.
+            incomingTravelDurationMs = PROJECTILE_TRAVEL_DURATION_MS,
             bowMinChargeHoldMs = BOW_MIN_CHARGE_HOLD_MS,
             bowMinSpeedDpPerSec = BOW_MIN_SPEED_DP_PER_SEC,
             bowMaxSpeedDpPerSec = BOW_MAX_SPEED_DP_PER_SEC,
@@ -401,6 +408,7 @@ object GameConstants {
             isLoud = true,
             projectileSpeedDpPerSec = SNIPER_PROJECTILE_SPEED_DP_PER_SEC,
             projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+            incomingTravelDurationMs = PROJECTILE_TRAVEL_DURATION_MS,
         )
         val LASER = WeaponConfig(
             type = WeaponType.LASER,
@@ -415,6 +423,7 @@ object GameConstants {
             isLoud = false,
             projectileSpeedDpPerSec = PROJECTILE_SPEED_DP_PER_SEC,
             projectileOffscreenTravelTimeMs = PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS,
+            incomingTravelDurationMs = LASER_INCOMING_TRAVEL_DURATION_MS,
             laserBeamDurationMs = LASER_BEAM_DURATION_MS,
             laserSampleIntervalMs = LASER_BEAM_SAMPLE_INTERVAL_MS,
         )

@@ -257,6 +257,16 @@ data class WeaponConfig(
     val isLoud: Boolean,
     val projectileSpeedDpPerSec: Float,
     val projectileOffscreenTravelTimeMs: Long,
+    // The receiver's incoming-projectile animation/network-delay duration for this weapon (see
+    // GameMessage.FireEvent.travelDurationMs) — a per-weapon constant for every weapon except BOW,
+    // whose real timing is instead derived per-shot from pull strength (DuelViewModel.fireBow) and
+    // never captured here; BOW's value below is only ever used as Solo Test Mode's simulated-
+    // opponent fallback (LoopbackGameConnection has no real drag gesture to derive pull strength
+    // from). No default value, deliberately: every WeaponConfig below must set this explicitly, so
+    // a future weapon addition that forgets it is a compile error, not a silent fallback to the
+    // wrong timing — this field exists specifically because that used to be duplicated ad hoc at
+    // each call site (DuelViewModel's laser/pistol paths, LoopbackGameConnection's simulated fire).
+    val incomingTravelDurationMs: Long,
     // Meaningful only for BOW; unused (0) for other types.
     val bowMinChargeHoldMs: Long = 0L,
     val bowMinSpeedDpPerSec: Float = 0f,

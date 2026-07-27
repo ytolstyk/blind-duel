@@ -3,6 +3,7 @@ package com.tolstykh.blindduel.connection
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.GameSession
 import com.tolstykh.blindduel.game.HealthMath
+import com.tolstykh.blindduel.game.WeaponType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,10 +151,24 @@ class LoopbackGameConnection @Inject constructor(
                     )
                 )
                 _incomingMessages.tryEmit(
-                    GameMessage.FireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_AMBIENT_FIRE_HIT_PROBABILITY)
+                    simulatedFireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_AMBIENT_FIRE_HIT_PROBABILITY)
                 )
             }
         }
+    }
+
+    /** Builds a [GameMessage.FireEvent] for the simulated dummy with a random [WeaponType] (and
+     * that weapon's own [WeaponConfig.incomingTravelDurationMs]) instead of always leaving
+     * weaponType/travelDurationMs at their PISTOL/flat defaults — otherwise every incoming shot in
+     * Solo Test Mode would look, sound, and behave like a pistol shot regardless of what a real
+     * opponent could be firing, unlike a real match where the opponent's actual equipped weapon
+     * drives all of that. Reads the same per-weapon lookup DuelViewModel's own fire paths use
+     * (WeaponConfigs.forType), rather than a second hand-rolled mapping, so a future weapon can't
+     * silently fall through to the wrong timing here. */
+    private fun simulatedFireEvent(hit: Boolean): GameMessage.FireEvent {
+        val weaponType = WeaponType.entries.random()
+        val travelDurationMs = GameConstants.WeaponConfigs.forType(weaponType).incomingTravelDurationMs
+        return GameMessage.FireEvent(hit = hit, weaponType = weaponType, travelDurationMs = travelDurationMs)
     }
 
     // The real transport applies this on the receiving peer's own device; here the peer is
@@ -172,7 +187,7 @@ class LoopbackGameConnection @Inject constructor(
             scope.launch {
                 delay(GameConstants.PROJECTILE_OFFSCREEN_TRAVEL_TIME_MS)
                 _incomingMessages.tryEmit(
-                    GameMessage.FireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_FIRE_BACK_HIT_PROBABILITY)
+                    simulatedFireEvent(hit = Random.nextFloat() < GameConstants.PRACTICE_FIRE_BACK_HIT_PROBABILITY)
                 )
             }
         }
