@@ -7,8 +7,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
+import com.tolstykh.blindduel.connection.ConnectionState
 import com.tolstykh.blindduel.connection.GameMessage
+import com.tolstykh.blindduel.connection.MessageOrigin
+import com.tolstykh.blindduel.connection.ReplayRecorder
+import com.tolstykh.blindduel.connection.connectionQuality
 import com.tolstykh.blindduel.connection.quit
+import com.tolstykh.blindduel.connection.reconnectStatus
 import com.tolstykh.blindduel.connection.sessionEndedEvents
 import com.tolstykh.blindduel.data.AppPreferencesRepository
 import com.tolstykh.blindduel.data.ParticleTheme
@@ -16,6 +21,7 @@ import com.tolstykh.blindduel.data.TrailTheme
 import com.tolstykh.blindduel.game.AngleMath
 import com.tolstykh.blindduel.game.BearingModel
 import com.tolstykh.blindduel.game.BowMath
+import com.tolstykh.blindduel.game.ConnectionQuality
 import com.tolstykh.blindduel.game.CrateMath
 import com.tolstykh.blindduel.game.DodgeMath
 import com.tolstykh.blindduel.game.DuelOutcome
@@ -46,9 +52,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -191,6 +200,7 @@ class DuelViewModel @Inject constructor(
     private val haptics: Haptics,
     private val weaponSoundPlayer: WeaponSoundPlayer,
     private val appPrefs: AppPreferencesRepository,
+    private val replayRecorder: ReplayRecorder,
 ) : ViewModel() {
 
     // Solo Test Mode lets the player pick a starting weapon from the Create screen so any weapon can
@@ -263,6 +273,22 @@ class DuelViewModel @Inject constructor(
 
     var sessionEnded by mutableStateOf(false)
         private set
+
+    /** True while a transient Nearby Connections drop is being silently retried (see
+     * ConnectionState.Reconnecting) — gates input via [isDuelPaused] and drives
+     * ReconnectingOverlay. Low-frequency (only flips on an actual connection-state transition,
+     * never per-tick), so a plain field is fine — no recomposition-isolation concern the way
+     * reloadProgress has. */
+    var isReconnecting by mutableStateOf(false)
+        private set
+    var reconnectingSinceMs by mutableStateOf<Long?>(null)
+        private set
+
+    /** Good/Fair/Poor heuristic from MotionUpdate jitter (see GameConnection.connectionQuality)
+     * — can tick as often as every ~120ms in the happy path, so DuelScreen must read this only
+     * inside its own isolated nested composable, never directly in DuelScreen's own body. */
+    val connectionQuality: StateFlow<ConnectionQuality> =
+        connection.connectionQuality().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), ConnectionQuality.GOOD)
 
     /** ~20Hz while actively drawing the bow; 0 otherwise. Kept out of DuelUiState for the same
      * recomposition-isolation reason as [reloadProgress]. */
@@ -379,6 +405,10 @@ class DuelViewModel @Inject constructor(
     private var lastProximityHapticAtMs: Long? = null
 
     init {
+        // Started first, before any sendMessage call, so the initial HealthUpdate below is
+        // captured too. Calibration is never recorded — see ReplayRecorder's own doc.
+        replayRecorder.startRecording()
+
         motionProvider.headingUpdates()
             .onEach { sample ->
                 myHeadingDegrees = sample.headingDegrees
@@ -403,8 +433,21 @@ class DuelViewModel @Inject constructor(
             .onEach { message -> handleIncoming(message) }
             .launchIn(viewModelScope)
 
+        connection.reconnectStatus()
+            .onEach { status ->
+                isReconnecting = status.isReconnecting
+                reconnectingSinceMs = status.sinceMs
+            }
+            .launchIn(viewModelScope)
+
         connection.sessionEndedEvents()
-            .onEach { sessionEnded = true }
+            .onEach {
+                sessionEnded = true
+                // Not only the decisive-outcome path in refreshOutcome() — a mid-duel quit/drop
+                // must also stop recording, so isRecording accurately reflects reality regardless
+                // of how the duel ended.
+                replayRecorder.stopRecording()
+            }
             .launchIn(viewModelScope)
 
         appPrefs.soundVolume
@@ -429,7 +472,7 @@ class DuelViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         viewModelScope.launch {
-            connection.sendMessage(GameMessage.HealthUpdate(matchMaxHealth))
+            sendAndRecord(GameMessage.HealthUpdate(matchMaxHealth))
         }
 
         startMotionBroadcastLoop()
@@ -449,12 +492,20 @@ class DuelViewModel @Inject constructor(
                 } else {
                     null
                 }
-                connection.sendMessage(
+                sendAndRecord(
                     GameMessage.MotionUpdate(myHeadingDegrees, myStepVector.x, myStepVector.y, sniperAimHeading),
                 )
                 delay(GameConstants.HEADING_BROADCAST_INTERVAL_MS)
             }
         }
+    }
+
+    /** Routes every outgoing message through [ReplayRecorder] before sending, so a future call
+     * site can never forget to record — used by every `connection.sendMessage` call site in this
+     * ViewModel instead of calling `connection.sendMessage` directly. */
+    private suspend fun sendAndRecord(message: GameMessage) {
+        replayRecorder.record(MessageOrigin.LOCAL, message)
+        connection.sendMessage(message)
     }
 
     /**
@@ -719,6 +770,7 @@ class DuelViewModel @Inject constructor(
      * forfeits the rest of that weapon's single magazine and reverts to the pistol, exactly like
      * letting the magazine run dry naturally would. */
     fun onManualReloadRequested() {
+        if (isDuelPaused()) return
         if (reloadStartedAtMs != null) return
         if (uiState.roundsRemaining >= uiState.equippedWeaponConfig.magazineSize) return
         startReload(System.currentTimeMillis())
@@ -727,6 +779,7 @@ class DuelViewModel @Inject constructor(
     /** A tap on the reload ring: completes the reload instantly if the dial is in the perfect
      * zone, otherwise extends the remaining reload as a mistiming penalty. */
     fun onReloadRingTapped() {
+        if (isDuelPaused()) return
         val startedAt = reloadStartedAtMs ?: return
         val now = System.currentTimeMillis()
         val reload = activeReload ?: currentReload()
@@ -743,16 +796,20 @@ class DuelViewModel @Inject constructor(
      * narrows the *opponent's* effective tolerance against me, once they receive it (see
      * [handleIncoming]'s DodgeEvent branch and [currentHitToleranceDegrees]). */
     fun onDodgeTapped() {
+        if (isDuelPaused()) return
         val now = System.currentTimeMillis()
         val last = myLastDodgeTapAtMs
         if (last != null && now - last < GameConstants.DODGE_COOLDOWN_MS) return
         myLastDodgeTapAtMs = now
         dodgeCooldownProgress = 0f
         haptics.dodgeFeedback(hapticIntensityFraction)
-        viewModelScope.launch { connection.sendMessage(GameMessage.DodgeEvent) }
+        viewModelScope.launch { sendAndRecord(GameMessage.DodgeEvent) }
     }
 
     private fun handleIncoming(message: GameMessage) {
+        // Captured regardless of message type, before dispatch — the full incoming stream is
+        // recorded even for message types this ViewModel doesn't itself act on.
+        replayRecorder.record(MessageOrigin.REMOTE, message)
         when (message) {
             is GameMessage.MotionUpdate -> {
                 opponentStepVector = Vector2(message.stepVectorXMeters, message.stepVectorYMeters)
@@ -805,7 +862,7 @@ class DuelViewModel @Inject constructor(
             myHealthZeroAtMs = System.currentTimeMillis()
         }
         uiState = uiState.copy(myHealth = newHealth)
-        viewModelScope.launch { connection.sendMessage(GameMessage.HealthUpdate(newHealth)) }
+        viewModelScope.launch { sendAndRecord(GameMessage.HealthUpdate(newHealth)) }
         refreshOutcome()
 
         viewModelScope.launch {
@@ -832,6 +889,7 @@ class DuelViewModel @Inject constructor(
         uiState = uiState.copy(outcome = outcome)
         if (outcome != DuelOutcome.Ongoing) {
             gameSession.recordOutcome(outcome, uiState.myHealth, uiState.opponentHealth)
+            replayRecorder.stopRecording()
         }
     }
 
@@ -847,6 +905,13 @@ class DuelViewModel @Inject constructor(
     // between shots, so firing is gated solely on not currently being in one.
     private fun canFire(): Boolean = !uiState.isReloading
 
+    /** Reconnect-gate: true while a transient connection drop is being silently retried (see
+     * isReconnecting). Checked at the top of every input handler that would otherwise send a
+     * message or consume a local resource (ammo, reload state, dodge cooldown) during the pause
+     * — one explicit check, five call sites, not folded into canFire() (which only covers ammo
+     * eligibility and doesn't reach onManualReloadRequested/onReloadRingTapped/onDodgeTapped). */
+    private fun isDuelPaused(): Boolean = isReconnecting
+
     fun onAimDrag(offset: Offset) {
         val wasIdle = aimDrag == null
         // Always updates, regardless of ammo/reload state: the aim line renders even while out
@@ -857,6 +922,7 @@ class DuelViewModel @Inject constructor(
 
         if (uiState.equippedWeapon == WeaponType.LASER && isLaserBeamActive) return // already sweeping
         if (!canFire()) return
+        if (isDuelPaused()) return
 
         if (wasIdle) {
             when (uiState.equippedWeaponConfig.type) {
@@ -920,7 +986,7 @@ class DuelViewModel @Inject constructor(
         // NonCancellable — without this, a beam ended by early release (the most common way to
         // end it) would silently never tell the opponent about a landed hit.
         withContext(NonCancellable) {
-            connection.sendMessage(
+            sendAndRecord(
                 GameMessage.FireEvent(
                     hit = accumulator.registeredHit,
                     weaponType = WeaponType.LASER,
@@ -953,6 +1019,12 @@ class DuelViewModel @Inject constructor(
     fun onAimRelease(densityPxPerDp: Float) {
         val drag = aimDrag
         aimDrag = null
+
+        // Checked before the laser branch too (a real bug found on review: the laser's
+        // early-release path used to bypass this gate entirely, since it returns before ever
+        // reaching the canFire()/isDuelPaused() pair below — reachable via LoopbackGameConnection,
+        // whose FireEvent handling applies a hit unconditionally with no connection-state check).
+        if (isDuelPaused()) return
 
         if (uiState.equippedWeapon == WeaponType.LASER && isLaserBeamActive) {
             laserBeamJob?.cancel() // triggers finishLaserBeam() above -> sends exactly one FireEvent
@@ -1155,7 +1227,7 @@ class DuelViewModel @Inject constructor(
             // Flat delay standing in for projectile flight time (see GameConstants doc) — the
             // opponent doesn't learn the outcome until this "travel time" elapses.
             delay(sendDelayMs)
-            connection.sendMessage(
+            sendAndRecord(
                 GameMessage.FireEvent(hit = hit, weaponType = weaponType, travelDurationMs = travelDurationMs),
             )
         }

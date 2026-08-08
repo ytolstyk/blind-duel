@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -49,14 +50,17 @@ import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameConstants
 import com.tolstykh.blindduel.game.HitTest
 import com.tolstykh.blindduel.game.WeaponType
+import com.tolstykh.blindduel.game.ConnectionQuality
 import com.tolstykh.blindduel.ui.components.CALIBRATION_ALIGNMENT_HINT
 import com.tolstykh.blindduel.ui.components.COMPASS_ACCURACY_HINT
+import com.tolstykh.blindduel.ui.components.ConnectionQualityDot
 import com.tolstykh.blindduel.ui.components.DismissibleHintChip
 import com.tolstykh.blindduel.ui.components.DodgeButton
 import com.tolstykh.blindduel.ui.components.KeepScreenOn
 import com.tolstykh.blindduel.ui.components.LabeledAmmoDots
 import com.tolstykh.blindduel.ui.components.LabeledHealthDots
 import com.tolstykh.blindduel.ui.components.ParticleField
+import com.tolstykh.blindduel.ui.components.ReconnectingOverlay
 import com.tolstykh.blindduel.ui.components.ReloadRing
 import com.tolstykh.blindduel.ui.theme.DuelAccentEmber
 import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
@@ -499,7 +503,33 @@ fun DuelScreen(
                     .padding(top = 16.dp),
             )
         }
+
+        DuelConnectionQualityDot(
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 20.dp, top = 62.dp),
+        )
+
+        // Composed unconditionally (not gated by an `if`) — see ReconnectingOverlay's own doc
+        // for why it must own its own visibility, and last (on top for both z-order and touch
+        // interception) so a tap during the pause reaches this instead of an aim/crate/reload
+        // target beneath it.
+        ReconnectingOverlay(
+            isReconnecting = viewModel.isReconnecting,
+            reconnectingSinceMs = viewModel.reconnectingSinceMs,
+        )
     }
+}
+
+// connectionQuality can tick as often as every ~120ms in the happy path (see
+// GameConnection.connectionQuality) — isolated into its own composable for exactly the same
+// reason as [DuelReloadRing] above.
+@Composable
+private fun DuelConnectionQualityDot(viewModel: DuelViewModel, modifier: Modifier = Modifier) {
+    val quality by viewModel.connectionQuality.collectAsStateWithLifecycle(initialValue = ConnectionQuality.GOOD)
+    ConnectionQualityDot(quality = quality, modifier = modifier)
 }
 
 // reloadProgress/isInPerfectReloadZone update ~20x/sec while a reload is active. Reading them

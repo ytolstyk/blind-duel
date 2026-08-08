@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tolstykh.blindduel.connection.ActiveGameConnection
 import com.tolstykh.blindduel.connection.GameMessage
+import com.tolstykh.blindduel.connection.ReplayRecorder
 import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
 import com.tolstykh.blindduel.game.DuelOutcome
@@ -21,10 +22,12 @@ import javax.inject.Inject
 class ResultViewModel @Inject constructor(
     private val gameSession: GameSession,
     private val activeGameConnection: ActiveGameConnection,
+    private val replayRecorder: ReplayRecorder,
 ) : ViewModel() {
 
     val outcome: DuelOutcome get() = gameSession.finalOutcome
     val opponentName: String get() = gameSession.opponentName
+    val hasReplay: Boolean get() = replayRecorder.hasRecording
 
     var sentRematch by mutableStateOf(false)
         private set

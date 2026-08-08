@@ -25,6 +25,7 @@ import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
 fun ResultScreen(
     onRematch: () -> Unit,
     onQuit: () -> Unit,
+    onWatchReplay: () -> Unit,
     viewModel: ResultViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(viewModel.rematchReady) {
@@ -65,6 +66,13 @@ fun ResultScreen(
             enabled = !viewModel.sentRematch,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (viewModel.sentRematch) "Waiting for opponent…" else "Rematch") }
+
+        if (viewModel.hasReplay) {
+            TextButton(
+                onClick = onWatchReplay,
+                modifier = Modifier.padding(top = 12.dp),
+            ) { Text("Watch Replay") }
+        }
 
         TextButton(
             onClick = {

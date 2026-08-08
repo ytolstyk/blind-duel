@@ -443,3 +443,86 @@ object HitToleranceMath {
         }
     }
 }
+
+/** Connection quality indicator (Duel-only — no MotionUpdate traffic exists during Calibration
+ * to measure). See [ConnectionQualityMath] and `GameConnection.connectionQuality()`. */
+enum class ConnectionQuality { GOOD, FAIR, POOR }
+
+/** Classifies jitter in `MotionUpdate` inter-arrival gaps into a [ConnectionQuality]. Purely a
+ * function of the gaps it's given — the caller (`GameConnection.connectionQuality()`) is
+ * responsible for merging in a periodic ticker so that *silence* (no new gap at all) is itself
+ * something that gets re-classified, since this function alone has no notion of "time has
+ * passed with no new sample." */
+object ConnectionQualityMath {
+    /** [interArrivalGapsMs] is a recent window of gaps between consecutive `MotionUpdate`
+     * arrivals (or, when the caller's ticker fires with no new message, the gap since the last
+     * arrival up to now) — mean absolute deviation from [expectedIntervalMs] against two
+     * thresholds. An empty list (no data at all yet) is treated as [ConnectionQuality.GOOD] —
+     * optimistic-by-default until there's evidence otherwise, matching how a fresh connection
+     * starts. */
+    fun classify(
+        interArrivalGapsMs: List<Long>,
+        expectedIntervalMs: Long,
+        goodDeviationMs: Long,
+        fairDeviationMs: Long,
+    ): ConnectionQuality {
+        if (interArrivalGapsMs.isEmpty()) return ConnectionQuality.GOOD
+        val meanAbsoluteDeviation =
+            interArrivalGapsMs.map { abs(it - expectedIntervalMs) }.average()
+        return when {
+            meanAbsoluteDeviation <= goodDeviationMs -> ConnectionQuality.GOOD
+            meanAbsoluteDeviation <= fairDeviationMs -> ConnectionQuality.FAIR
+            else -> ConnectionQuality.POOR
+        }
+    }
+}
+
+/** Generic, connection-agnostic time-series sampling for spectator/replay playback —
+ * deliberately has zero dependency on `connection.GameMessage` (kept here, not in
+ * `connection/`, so `game/` never depends on `connection/`; the reverse dependency already
+ * exists via `GameMessage.kt` importing `game.GameConstants`). `ReplayViewModel` maps recorded
+ * `GameMessage`s into `Sample<T>` series and calls these. */
+object TimeSeriesSampling {
+    data class Sample<T>(val atMs: Long, val value: T)
+
+    /** "Hold last known value" (step function) — matches how the live game already behaves
+     * (positions/heading/health only ever update on message receipt, nothing interpolates
+     * between ticks). **Precondition: [sortedSamples] must already be sorted ascending by
+     * [Sample.atMs]** — the caller (`ReplayViewModel`) sorts each series once, at construction,
+     * since it's static for the life of a replay; this function used to defensively re-sort on
+     * every call, which meant a full `O(n log n)` sort (with a fresh list allocation) on every
+     * ~120ms playback tick for the entire replay — real, measurable, entirely avoidable work for
+     * data that never changes after the recording is loaded. Binary search here in exchange:
+     * `O(log n)` per call, zero allocation. Returns [default] if [atMs] is before the first
+     * sample. */
+    fun <T> sampleAtOrBefore(sortedSamples: List<Sample<T>>, atMs: Long, default: T): T {
+        var lo = 0
+        var hi = sortedSamples.size - 1
+        var result = default
+        while (lo <= hi) {
+            val mid = (lo + hi) / 2
+            if (sortedSamples[mid].atMs <= atMs) {
+                result = sortedSamples[mid].value
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return result
+    }
+
+    /** Every recorded event timestamped in `(fromExclusiveMs, toInclusiveMs]` — the fix for
+     * discrete one-shot events (`FireEvent`/`HealthUpdate`) that [sampleAtOrBefore]'s
+     * single-most-recent-value model cannot represent: this game's own simultaneous
+     * double-elimination draw mechanic can produce two `FireEvent`s and two `HealthUpdate`s
+     * within milliseconds of each other, easily inside one playback tick, and a "nearest single
+     * event" lookup would silently drop one. **Precondition: [sortedEvents] must already be
+     * sorted ascending by [Sample.atMs]** (same contract as [sampleAtOrBefore] — filtering a
+     * pre-sorted list preserves order, so no re-sort is needed here either). The caller
+     * (`ReplayViewModel`) is responsible for calling this once per tick with `fromExclusiveMs`
+     * set to the previous tick's `toInclusiveMs` (and resetting that cursor to 0 alongside
+     * `playbackPositionMs` on restart), so every event is counted exactly once. */
+    fun <T> eventsInWindow(sortedEvents: List<Sample<T>>, fromExclusiveMs: Long, toInclusiveMs: Long): List<T> =
+        sortedEvents.filter { it.atMs > fromExclusiveMs && it.atMs <= toInclusiveMs }
+            .map { it.value }
+}

@@ -56,6 +56,12 @@ class LoopbackGameConnection @Inject constructor(
      * Mode without waiting on [maybeFireBack]'s reactive chance. */
     private var ambientFireJob: Job? = null
 
+    /** Debug-only fault injection (not wired to any production UI) — when enabled, the ambient
+     * `MotionUpdate` loop's interval is randomized instead of steady, so the connection-quality
+     * classifier's `FAIR`/`POOR` branches can be exercised via Solo Test Mode without needing
+     * two physical devices to produce real jitter. */
+    var jitterInjectionEnabled: Boolean = false
+
     override suspend fun startHosting(sessionCode: String) = simulateConnect()
 
     override suspend fun startJoining(sessionCode: String, localPlayerName: String) = simulateConnect()
@@ -118,11 +124,35 @@ class LoopbackGameConnection @Inject constructor(
         opponentHealth = gameSession.matchMaxHealth
     }
 
+    /** Debug-only fault injection (not wired to any production UI) — simulates a transient
+     * transport drop and silent recovery, so the `Reconnecting` state machine can be exercised
+     * via Solo Test Mode without needing two physical devices. */
+    fun simulateDrop() {
+        ambientMotionJob?.cancel()
+        ambientMotionJob = null
+        ambientFireJob?.cancel()
+        ambientFireJob = null
+        _connectionState.value = ConnectionState.Reconnecting(System.currentTimeMillis())
+        scope.launch {
+            delay(SIMULATED_DROP_DURATION_MS)
+            _connectionState.value = ConnectionState.Connected("loopback-opponent")
+            startAmbientOpponentMotion()
+        }
+    }
+
     private fun startAmbientOpponentMotion() {
         ambientMotionJob?.cancel()
         ambientMotionJob = scope.launch {
             while (true) {
-                delay(GameConstants.HEADING_BROADCAST_INTERVAL_MS)
+                val interval = if (jitterInjectionEnabled) {
+                    Random.nextLong(
+                        GameConstants.HEADING_BROADCAST_INTERVAL_MS,
+                        GameConstants.HEADING_BROADCAST_INTERVAL_MS + JITTER_INJECTION_MAX_EXTRA_DELAY_MS,
+                    )
+                } else {
+                    GameConstants.HEADING_BROADCAST_INTERVAL_MS
+                }
+                delay(interval)
                 opponentHeadingDegrees = (
                     opponentHeadingDegrees +
                         Random.nextFloat() * GameConstants.PRACTICE_HEADING_JITTER_DEGREES -
@@ -207,5 +237,7 @@ class LoopbackGameConnection @Inject constructor(
         const val REMATCH_ECHO_DELAY_MS = 300L
         const val READY_ECHO_DELAY_MS = 300L
         const val SIMULATED_HEALTH_UPDATE_DELAY_MS = 100L
+        const val SIMULATED_DROP_DURATION_MS = 2_000L
+        const val JITTER_INJECTION_MAX_EXTRA_DELAY_MS = 400L
     }
 }

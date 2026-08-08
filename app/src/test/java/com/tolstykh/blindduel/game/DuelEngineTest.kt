@@ -743,3 +743,122 @@ class HitToleranceMathTest {
         }
     }
 }
+
+class ConnectionQualityMathTest {
+    private val expectedIntervalMs = GameConstants.HEADING_BROADCAST_INTERVAL_MS
+    private val goodDeviationMs = GameConstants.CONNECTION_QUALITY_GOOD_DEVIATION_MS
+    private val fairDeviationMs = GameConstants.CONNECTION_QUALITY_FAIR_DEVIATION_MS
+
+    @Test
+    fun `no data yet classifies as GOOD`() {
+        assertEquals(
+            ConnectionQuality.GOOD,
+            ConnectionQualityMath.classify(emptyList(), expectedIntervalMs, goodDeviationMs, fairDeviationMs),
+        )
+    }
+
+    @Test
+    fun `steady gaps at the expected interval classify as GOOD`() {
+        val gaps = List(10) { expectedIntervalMs }
+        assertEquals(
+            ConnectionQuality.GOOD,
+            ConnectionQualityMath.classify(gaps, expectedIntervalMs, goodDeviationMs, fairDeviationMs),
+        )
+    }
+
+    @Test
+    fun `moderate deviation within the fair window classifies as FAIR`() {
+        val gaps = List(10) { expectedIntervalMs + (goodDeviationMs + fairDeviationMs) / 2 }
+        assertEquals(
+            ConnectionQuality.FAIR,
+            ConnectionQualityMath.classify(gaps, expectedIntervalMs, goodDeviationMs, fairDeviationMs),
+        )
+    }
+
+    @Test
+    fun `sustained large deviation classifies as POOR`() {
+        val gaps = List(10) { expectedIntervalMs + fairDeviationMs * 5 }
+        assertEquals(
+            ConnectionQuality.POOR,
+            ConnectionQualityMath.classify(gaps, expectedIntervalMs, goodDeviationMs, fairDeviationMs),
+        )
+    }
+}
+
+class TimeSeriesSamplingTest {
+    @Test
+    fun `sampleAtOrBefore returns the default before the first sample`() {
+        val samples = listOf(TimeSeriesSampling.Sample(atMs = 100L, value = "a"))
+        assertEquals("default", TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 50L, default = "default"))
+    }
+
+    @Test
+    fun `sampleAtOrBefore matches an exact timestamp`() {
+        val samples = listOf(
+            TimeSeriesSampling.Sample(atMs = 100L, value = "a"),
+            TimeSeriesSampling.Sample(atMs = 200L, value = "b"),
+        )
+        assertEquals("b", TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 200L, default = "default"))
+    }
+
+    @Test
+    fun `sampleAtOrBefore holds the earlier value between samples`() {
+        val samples = listOf(
+            TimeSeriesSampling.Sample(atMs = 100L, value = "a"),
+            TimeSeriesSampling.Sample(atMs = 200L, value = "b"),
+        )
+        assertEquals("a", TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 150L, default = "default"))
+    }
+
+    @Test
+    fun `sampleAtOrBefore holds the last value after the last sample`() {
+        val samples = listOf(
+            TimeSeriesSampling.Sample(atMs = 100L, value = "a"),
+            TimeSeriesSampling.Sample(atMs = 200L, value = "b"),
+        )
+        assertEquals("b", TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 999L, default = "default"))
+    }
+
+    @Test
+    fun `sampleAtOrBefore binary search matches linear scan across a larger sorted series`() {
+        // Precondition changed on review: the function used to defensively re-sort its input on
+        // every call (real, measurable per-tick cost during replay playback — see the fix), so
+        // now it requires pre-sorted input and binary-searches it instead. This exercises that
+        // binary search against a bigger series, including a query landing exactly between two
+        // samples, to catch an off-by-one in the search bounds.
+        val samples = (0 until 50).map { i -> TimeSeriesSampling.Sample(atMs = i * 10L, value = i) }
+        assertEquals(0, TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 5L, default = -1))
+        assertEquals(24, TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 245L, default = -1))
+        assertEquals(49, TimeSeriesSampling.sampleAtOrBefore(samples, atMs = 10_000L, default = -1))
+    }
+
+    @Test
+    fun `eventsInWindow returns every event in the window, not just the latest`() {
+        // The simultaneous-draw fixture this fix exists for: two FireEvents (represented here
+        // as plain markers) within a few ms of each other, inside one tick window.
+        val events = listOf(
+            TimeSeriesSampling.Sample(atMs = 1000L, value = "fire-a"),
+            TimeSeriesSampling.Sample(atMs = 1003L, value = "fire-b"),
+        )
+        val result = TimeSeriesSampling.eventsInWindow(events, fromExclusiveMs = 990L, toInclusiveMs = 1010L)
+        assertEquals(listOf("fire-a", "fire-b"), result)
+    }
+
+    @Test
+    fun `eventsInWindow excludes the exact fromExclusiveMs boundary and includes toInclusiveMs`() {
+        val events = listOf(
+            TimeSeriesSampling.Sample(atMs = 100L, value = "boundary-start"),
+            TimeSeriesSampling.Sample(atMs = 200L, value = "boundary-end"),
+        )
+        val result = TimeSeriesSampling.eventsInWindow(events, fromExclusiveMs = 100L, toInclusiveMs = 200L)
+        assertEquals(listOf("boundary-end"), result)
+    }
+
+    @Test
+    fun `eventsInWindow after a restart-reset cursor does not replay past events`() {
+        val events = listOf(TimeSeriesSampling.Sample(atMs = 5000L, value = "late-event"))
+        // Simulates a restart: previousTickMs reset to 0 alongside playbackPositionMs.
+        val firstTickAfterRestart = TimeSeriesSampling.eventsInWindow(events, fromExclusiveMs = 0L, toInclusiveMs = 120L)
+        assertTrue(firstTickAfterRestart.isEmpty())
+    }
+}

@@ -212,6 +212,44 @@ object GameConstants {
     const val SESSION_CODE_LENGTH = 6
     const val NEARBY_SERVICE_ID = "com.tolstykh.blindduel.SERVICE"
 
+    // Reconnect-on-drop grace period — a transient Nearby Connections drop pauses the duel and
+    // silently retries re-advertising/re-discovering instead of ending the session immediately.
+    // See NearbyGameConnection.runReconnectLoop.
+    const val RECONNECT_GRACE_PERIOD_MS = 8_000L
+    const val RECONNECT_RETRY_INTERVAL_MS = 1_000L
+    // ReconnectingOverlay's own display timing — cosmetic, but kept here for consistency with
+    // every other "purely cosmetic but still a shared tunable" constant in this file.
+    const val RECONNECT_OVERLAY_TICK_MS = 500L
+    const val RECONNECT_OVERLAY_CONFIRMATION_DURATION_MS = 600L
+    const val RECONNECT_OVERLAY_SCRIM_ALPHA = 0.72f
+    // Calibration's one-shot handshake messages (ReadyForDuel/CalibrationComplete) have no
+    // resend-on-reconnect, so a bounded timeout (not the retry loop itself) is what recovers a
+    // handshake stuck waiting on a message lost during a reconnect gap — see
+    // CalibrationViewModel's two independently-scoped timeout jobs.
+    const val CALIBRATION_HANDSHAKE_TIMEOUT_MS = RECONNECT_GRACE_PERIOD_MS * 3
+
+    // Connection quality indicator — Duel-only heuristic (no MotionUpdate traffic exists during
+    // Calibration to measure). Classifies jitter in MotionUpdate inter-arrival gaps into a
+    // Good/Fair/Poor signal; see DuelEngine.ConnectionQualityMath and
+    // GameConnection.connectionQuality().
+    const val CONNECTION_QUALITY_WINDOW_SIZE = 10
+    const val CONNECTION_QUALITY_GOOD_DEVIATION_MS = 60L
+    const val CONNECTION_QUALITY_FAIR_DEVIATION_MS = 200L
+    const val CONNECTION_QUALITY_HARD_TIMEOUT_MS = 500L
+
+    // Spectator/replay mode — in-memory recording of a duel's GameMessage stream (see
+    // ReplayRecorder), reconstructed and replayed on ReplayScreen as a zoomed-out top-down view.
+    const val REPLAY_PHONE_SILHOUETTE_WIDTH_DP = 14f
+    const val REPLAY_PHONE_SILHOUETTE_HEIGHT_DP = 26f
+    const val REPLAY_DOT_RADIUS_DP = 8f
+    const val REPLAY_VIEW_PADDING_METERS = 1.5f
+    const val REPLAY_PLAYBACK_TICK_MS = 120L
+    const val REPLAY_HIT_FLASH_RING_RADIUS_MULTIPLIER = 2.2f
+    // Generously sized so hitting this should be rare in real play (a 15+ minute duel at full
+    // broadcast cadence is a few thousand entries) — and hitting it sets ReplayRecorder.
+    // wasTruncated rather than silently dropping the match's likely-decisive final messages.
+    const val REPLAY_MAX_RECORDED_MESSAGES = 20_000
+
     // Shotgun — wide spread (modeled purely as a widened hit tolerance, hit/miss stays
     // binary), slow projectile, loud. Pellet trail constants are cosmetic only, never
     // consulted by hit-testing.

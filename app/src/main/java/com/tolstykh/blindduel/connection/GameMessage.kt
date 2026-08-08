@@ -94,3 +94,21 @@ fun GameMessage.toBytes(): ByteArray =
 
 fun ByteArray.toGameMessage(): GameMessage =
     gameMessageJson.decodeFromString(this.decodeToString())
+
+/**
+ * True unless a peer-supplied `Float` field is `NaN`/infinite. kotlinx.serialization's default
+ * `Json` config (`allowSpecialFloatingPointValues = false`, unchanged in [gameMessageJson])
+ * already rejects those at decode time today, so this is currently redundant in practice — but
+ * that protection is an implicit library default, not an explicit, tested application invariant.
+ * A non-finite [MotionUpdate.headingDegrees] would feed straight into `Canvas.rotate()` in
+ * `ReplayScreen`, the first place in the app that renders a peer-supplied heading as a rotation
+ * transform (the live duel never renders the opponent at all). Checked explicitly here so this
+ * protection doesn't silently depend on that library default never changing.
+ */
+fun GameMessage.hasFiniteNumericFields(): Boolean = when (this) {
+    is GameMessage.MotionUpdate ->
+        headingDegrees.isFinite() && stepVectorXMeters.isFinite() && stepVectorYMeters.isFinite() &&
+            (sniperAimHeadingDegrees?.isFinite() ?: true)
+    is GameMessage.CalibrationComplete -> baselineHeadingDegrees.isFinite()
+    else -> true
+}
