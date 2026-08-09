@@ -6,10 +6,12 @@ Neither screen ever shows the opponent's character — aiming relies on real-wor
 
 ## How it works
 
-1. **Create / Join** — one player creates a session (generates a 6-char code + QR); the other scans the QR to connect over Google Nearby Connections. No internet, no server, no account.
+1. **Create / Join** — the host picks a match length (Quick Duel / Standard / Marathon) and creates a session (generates a 6-char code + QR); the other player scans the QR to connect over Google Nearby Connections. No internet, no server, no account.
 2. **Calibration** — both players face each other, each phone runs its own 3-2-1 countdown and captures its compass baseline heading.
-3. **Duel** — drag to aim, release to fire. Each phone tracks the opponent's rough position via dead reckoning (compass heading + step detection) rather than any shared ground truth, so aim is intentionally imprecise.
-4. **Result** — first to reduce the opponent's health to zero wins (with a simultaneous-elimination draw window); rematch or return to the menu.
+3. **Duel** — drag to aim, release to fire. Each phone tracks the opponent's rough position via dead reckoning (compass heading + step detection) rather than any shared ground truth, so aim is intentionally imprecise. Weapon crates fall periodically — shoot one to swap the pistol for a shotgun, hunting bow, sniper rifle, or laser, each with its own magazine, hit tolerance, and loud/silent tell. A dodge button briefly narrows the opponent's odds against you; standing still too long fogs up your own aim as a tradeoff.
+4. **Result** — first to reduce the opponent's health to zero wins (with a simultaneous-elimination draw window); rematch, watch an instant replay of the duel, or return to the menu.
+
+A Settings screen (sound, haptics, screen-shake intensity, and cosmetic trail/particle themes) and a debug-only Solo Test practice mode round out the app.
 
 ## Tech stack
 
