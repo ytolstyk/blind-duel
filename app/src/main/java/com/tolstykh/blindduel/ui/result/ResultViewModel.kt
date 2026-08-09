@@ -10,8 +10,10 @@ import com.tolstykh.blindduel.connection.GameMessage
 import com.tolstykh.blindduel.connection.ReplayRecorder
 import com.tolstykh.blindduel.connection.quit
 import com.tolstykh.blindduel.connection.sessionEndedEvents
+import com.tolstykh.blindduel.data.AppPreferencesRepository
 import com.tolstykh.blindduel.game.DuelOutcome
 import com.tolstykh.blindduel.game.GameSession
+import com.tolstykh.blindduel.sensor.Haptics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -23,6 +25,8 @@ class ResultViewModel @Inject constructor(
     private val gameSession: GameSession,
     private val activeGameConnection: ActiveGameConnection,
     private val replayRecorder: ReplayRecorder,
+    private val haptics: Haptics,
+    private val appPrefs: AppPreferencesRepository,
 ) : ViewModel() {
 
     val outcome: DuelOutcome get() = gameSession.finalOutcome
@@ -41,6 +45,9 @@ class ResultViewModel @Inject constructor(
     private val connection get() = activeGameConnection.current
     private var receivedRematch = false
 
+    /** Same write-only-consumed-by-haptics pattern as DuelViewModel.hapticIntensityFraction. */
+    private var hapticIntensityFraction = AppPreferencesRepository.DEFAULT_HAPTIC_INTENSITY / 100f
+
     init {
         connection.incomingMessages
             .onEach { message ->
@@ -54,7 +61,17 @@ class ResultViewModel @Inject constructor(
         connection.sessionEndedEvents()
             .onEach { sessionEnded = true }
             .launchIn(viewModelScope)
+
+        appPrefs.hapticIntensity
+            .onEach { hapticIntensityFraction = it / 100f }
+            .launchIn(viewModelScope)
     }
+
+    /** Paired with [com.tolstykh.blindduel.ui.components.LossFanfare]'s avatar-explosion beat. */
+    fun onLossExploded() = haptics.resultExplosionFeedback(hapticIntensityFraction)
+
+    /** Paired with [com.tolstykh.blindduel.ui.components.VictoryBalloons]'s just-for-fun pop. */
+    fun onBalloonPopped() = haptics.balloonPopFeedback(hapticIntensityFraction)
 
     fun onRematchClicked() {
         if (sentRematch) return

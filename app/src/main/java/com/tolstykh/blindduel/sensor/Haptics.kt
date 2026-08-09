@@ -45,4 +45,16 @@ class Haptics @Inject constructor(@ApplicationContext context: Context) {
     /** "Getting close" pulse — see [com.tolstykh.blindduel.game.ProximityMath]. */
     fun proximityFeedback(intensityFraction: Float) =
         vibrate(GameConstants.PROXIMITY_HAPTIC_DURATION_MS, GameConstants.PROXIMITY_HAPTIC_AMPLITUDE, intensityFraction)
+
+    /** ResultScreen's loss avatar-explosion beat — longer/stronger than [hitFeedback] since it's
+     * a one-time dramatic moment rather than a repeated in-duel cue. */
+    fun resultExplosionFeedback(intensityFraction: Float) = vibrate(
+        GameConstants.HAPTIC_RESULT_EXPLOSION_DURATION_MS,
+        GameConstants.HAPTIC_RESULT_EXPLOSION_AMPLITUDE,
+        intensityFraction,
+    )
+
+    /** ResultScreen's just-for-fun victory balloon pop. */
+    fun balloonPopFeedback(intensityFraction: Float) =
+        vibrate(GameConstants.HAPTIC_BALLOON_POP_DURATION_MS, GameConstants.HAPTIC_BALLOON_POP_AMPLITUDE, intensityFraction)
 }

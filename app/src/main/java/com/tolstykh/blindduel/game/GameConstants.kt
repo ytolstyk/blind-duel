@@ -361,11 +361,15 @@ object GameConstants {
     const val HIT_PARTICLE_MAX_DISTANCE_DP = 90f
     const val HIT_PARTICLE_SIZE_DP = 5f
     // Shared floor for a particle burst's randomized per-particle speed — used by both the
-    // directional hit-particle spray above and the omnidirectional crate-explosion burst (see
-    // DuelScreen.randomSpraySeeds), not specific to either one.
+    // directional hit-particle spray above and the shared omnidirectional burst primitive (see
+    // ui/components/ParticleBurst.kt's randomSpraySeeds), not specific to either one.
     const val PARTICLE_BURST_MIN_SPEED_FACTOR = 0.5f
-    // Shared per-particle shrink-over-lifetime factor for the same two particle bursts.
+    // Shared per-particle shrink-over-lifetime factor for the same particle bursts.
     const val PARTICLE_SHRINK_FACTOR = 0.5f
+    // Passed as randomSpraySeeds' spreadDegrees for a full-circle omnidirectional burst (the
+    // crate explosion, and both new Result-screen fanfare bursts) — see its doc for why 180f
+    // (a ±180° range) means "any direction" rather than a narrow spray.
+    const val PARTICLE_BURST_FULL_CIRCLE_SPREAD_DEGREES = 180f
 
     // Incoming-hit "absorption" — as a hit projectile's travel progress nears 1 (arriving at the
     // character, distance -> 0), its head shrinks/fades toward this floor instead of just
@@ -373,6 +377,57 @@ object GameConstants {
     // stopping short. Never applied to a miss (which overshoots past the character instead) or
     // to any outgoing shot.
     const val PROJECTILE_ARRIVAL_SHRINK_FACTOR = 0.9f
+
+    // Result screen fanfare — ResultScreen is shared by real duels and Solo Test/practice mode
+    // (both funnel through the same DuelScreen -> Result nav destination), so these effects
+    // apply identically to both. Purely cosmetic, no gameplay effect.
+    const val RESULT_AVATAR_SIZE_DP = 96f
+    const val RESULT_AVATAR_HOLD_DURATION_MS = 350L
+    // The avatar's brief "puff up" beat right as it starts bursting, before fading out — also
+    // used to derive the remaining fade-out duration below so the two stay in lockstep.
+    const val RESULT_AVATAR_OVERSHOOT_DURATION_MS = 120
+    const val RESULT_AVATAR_OVERSHOOT_SCALE = 1.25f
+    // Loss: the avatar bursts into radiating shards while "YOU"/"LOSE" fly apart to their
+    // resting positions — RESULT_TEXT_FLY_START_DELAY_MS overlaps the tail of the explosion so
+    // the burst and the text launch read as one continuous beat, not two separate ones.
+    const val RESULT_EXPLOSION_DURATION_MS = 500
+    const val RESULT_EXPLOSION_SHARD_COUNT = 14
+    const val RESULT_EXPLOSION_MAX_DISTANCE_DP = 160f
+    const val RESULT_EXPLOSION_SHARD_SIZE_DP = 7f
+    const val RESULT_TEXT_FLY_START_DELAY_MS = 250L
+    const val RESULT_TEXT_ALPHA_FADE_MS = 150
+    // "LOSE" launches slightly after "YOU" so the two reads as a beat, not simultaneous.
+    const val RESULT_LOSE_TEXT_STAGGER_MS = 80L
+    // How far short of the half-height "YOU"/"LOSE" rest from the very top/bottom edge.
+    const val RESULT_TEXT_RESTING_INSET_DP = 24f
+
+    // Victory balloons — endlessly rising, poppable by tapping for fun; popping has no scoring
+    // effect. Per-balloon rise duration is randomized within this range so they don't all drift
+    // upward in visible lockstep.
+    const val RESULT_BALLOON_COUNT = 7
+    const val RESULT_BALLOON_MIN_RISE_DURATION_MS = 6_000
+    const val RESULT_BALLOON_MAX_RISE_DURATION_MS = 11_000
+    const val RESULT_BALLOON_WIDTH_DP = 46f
+    const val RESULT_BALLOON_HEIGHT_DP = 58f
+    const val RESULT_BALLOON_STRING_LENGTH_DP = 34f
+    const val RESULT_BALLOON_WOBBLE_AMPLITUDE_DP = 18f
+    // Wobble cycles across one full bottom-to-top rise — same "cycles per progress fraction"
+    // convention as CRATE_WOBBLE_FREQUENCY below, not a wall-clock frequency.
+    const val RESULT_BALLOON_WOBBLE_CYCLES = 3f
+    const val RESULT_BALLOON_POP_DURATION_MS = 260
+    const val RESULT_BALLOON_RESPAWN_DELAY_MS = 500L
+    // Extra random jitter added on top of each balloon's staggered initial entrance so all
+    // RESULT_BALLOON_COUNT balloons don't launch in visible lockstep.
+    const val RESULT_BALLOON_INITIAL_JITTER_MS = 500L
+    const val RESULT_BALLOON_POP_PARTICLE_COUNT = 8
+    // Horizontal spawn lane margin, as a fraction of screen width kept clear on each edge, so a
+    // balloon's wobble never carries it fully off-screen.
+    const val RESULT_BALLOON_SPAWN_MARGIN_FRACTION = 0.1f
+
+    const val HAPTIC_RESULT_EXPLOSION_DURATION_MS = 200L
+    const val HAPTIC_RESULT_EXPLOSION_AMPLITUDE = 255
+    const val HAPTIC_BALLOON_POP_DURATION_MS = 30L
+    const val HAPTIC_BALLOON_POP_AMPLITUDE = 140
 
     /** Assembles the flat per-weapon constants above into one [WeaponConfig] per [WeaponType]. */
     object WeaponConfigs {

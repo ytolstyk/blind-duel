@@ -60,7 +60,12 @@ import com.tolstykh.blindduel.ui.components.KeepScreenOn
 import com.tolstykh.blindduel.ui.components.LabeledAmmoDots
 import com.tolstykh.blindduel.ui.components.LabeledHealthDots
 import com.tolstykh.blindduel.ui.components.ParticleField
+import com.tolstykh.blindduel.ui.components.ParticleSeed
 import com.tolstykh.blindduel.ui.components.ReconnectingOverlay
+import com.tolstykh.blindduel.ui.components.drawExplosion
+import com.tolstykh.blindduel.ui.components.drawOmnidirectionalParticles
+import com.tolstykh.blindduel.ui.components.offsetFromCenter
+import com.tolstykh.blindduel.ui.components.randomSpraySeeds
 import com.tolstykh.blindduel.ui.components.ReloadRing
 import com.tolstykh.blindduel.ui.theme.DuelAccentEmber
 import com.tolstykh.blindduel.ui.theme.DuelAccentViolet
@@ -179,9 +184,11 @@ fun DuelScreen(
     }
     val crateExplosionParticleSeeds = remember(crateExplosion?.triggeredAtMs) {
         if (crateExplosion != null) {
-            // 180 = a full ±180° range, i.e. a true full-circle spread for an omnidirectional
-            // burst (see drawOmnidirectionalParticles' doc on how it uses this angle directly).
-            randomSpraySeeds(crateExplosion.triggeredAtMs, GameConstants.CRATE_EXPLOSION_PARTICLE_COUNT, spreadDegrees = 180f)
+            randomSpraySeeds(
+                crateExplosion.triggeredAtMs,
+                GameConstants.CRATE_EXPLOSION_PARTICLE_COUNT,
+                spreadDegrees = GameConstants.PARTICLE_BURST_FULL_CIRCLE_SPREAD_DEGREES,
+            )
         } else {
             emptyList()
         }
@@ -702,14 +709,6 @@ private fun DuelParticleBackdrop(
     )
 }
 
-/** Screen-space offset of a point [distancePx] away from center along a compass [angleDegrees]
- * (0°=up, clockwise), shared by every draw call that positions something relative to the
- * character so the angle→offset sign convention only lives in one place. */
-private fun offsetFromCenter(angleDegrees: Float, distancePx: Float): Offset {
-    val rad = Math.toRadians(angleDegrees.toDouble())
-    return Offset((distancePx * sin(rad)).toFloat(), (-distancePx * cos(rad)).toFloat())
-}
-
 // Camera shake on firing (small) and on taking a hit (larger). Isolated into its own
 // composable — like [DuelReloadRing] and [DuelParticleBackdrop] above — so the per-frame
 // graphicsLayer reads driving the shake don't invalidate DuelScreen's own recompose scope; the
@@ -907,35 +906,6 @@ private fun DrawScope.drawCharacter(rotationDegrees: Float, center: Offset, radi
     }
 }
 
-/** Expanding, fading ring burst — used both when an incoming shot lands on the character and
- * when a crate is destroyed (see the two call sites in [DuelScreen]'s Canvas), just recentered
- * and recolored per case; [color] defaults to the original incoming-hit danger color so every
- * existing call site keeps its exact prior look without passing it explicitly. */
-private fun DrawScope.drawExplosion(center: Offset, radiusPx: Float, progress: Float, color: Color = DuelIncomingDanger) {
-    val maxRadiusPx = GameConstants.EXPLOSION_MAX_RADIUS_DP.dp.toPx()
-    val coreAlpha = 1f - progress
-    drawCircle(
-        color = color.copy(alpha = coreAlpha * GameConstants.EXPLOSION_CORE_ALPHA_MULTIPLIER),
-        radius = radiusPx * (1f + progress),
-        center = center,
-    )
-    repeat(GameConstants.EXPLOSION_RING_COUNT) { index ->
-        // Clamped below 1 regardless of tuning: see the invariant documented next to
-        // EXPLOSION_RING_STAGGER in GameConstants — without this, a stagger*count combination
-        // that pushes a ring's delay to/past 1 would divide by zero or go negative below.
-        val delayFraction = (index * GameConstants.EXPLOSION_RING_STAGGER).coerceAtMost(0.9f)
-        val ringProgress = ((progress - delayFraction) / (1f - delayFraction)).coerceIn(0f, 1f)
-        if (ringProgress <= 0f || ringProgress >= 1f) return@repeat
-        val ringRadius = radiusPx + (maxRadiusPx - radiusPx) * ringProgress
-        drawCircle(
-            color = color.copy(alpha = (1f - ringProgress) * GameConstants.EXPLOSION_RING_ALPHA_MULTIPLIER),
-            radius = ringRadius,
-            center = center,
-            style = Stroke(width = GameConstants.EXPLOSION_RING_STROKE_WIDTH_DP.dp.toPx()),
-        )
-    }
-}
-
 /** Draws a projectile with a flame-like tail that flops perpendicular to its travel direction
  * and fades/cools from [headColor] to [tailColor] toward the back. [travelPhase] drives the
  * tail's wobble — the outgoing/incoming shot's own travel progress, so the flop animates in
@@ -1056,31 +1026,6 @@ private fun DrawScope.drawCrate(center: Offset, sizePx: Float) {
     )
 }
 
-/** One randomized particle in a burst: an angle offset (interpreted relative to whatever base
- * angle the caller is spraying around — a bearing for [drawHitParticles]'s narrow cone, or used
- * directly as a full-circle angle for [drawOmnidirectionalParticles]'s crate burst) and a
- * per-particle speed multiplier. A named type instead of `Pair<Float, Float>` so a reader doesn't
- * have to guess which element is which, or reverse-engineer a caller-side remap. */
-private data class ParticleSeed(val angleOffsetDegrees: Float, val speedFactor: Float)
-
-/** Computes [count] [ParticleSeed]s once per burst, seeded off its own trigger timestamp — called
- * from `remember(trigger timestamp)` in the composable body, not the draw closure, same
- * convention as [shotgunPelletJitters] and for the same reason (avoid reallocating/re-rolling a
- * fresh [Random] on every single redraw frame of the burst). [spreadDegrees] is the half-width of
- * the uniform angle range each seed's `angleOffsetDegrees` is drawn from (±[spreadDegrees]) —
- * shared by both the directional hit-particle spray (a narrow spread around a bearing) and the
- * omnidirectional crate-explosion burst (spreadDegrees = 180, i.e. a full circle), so neither
- * caller needs to remap the raw angle itself. */
-private fun randomSpraySeeds(seed: Long, count: Int, spreadDegrees: Float): List<ParticleSeed> {
-    val random = Random(seed)
-    return List(count) {
-        val angleOffsetDegrees = (random.nextFloat() * 2f - 1f) * spreadDegrees
-        val speedFactor = GameConstants.PARTICLE_BURST_MIN_SPEED_FACTOR +
-            random.nextFloat() * (1f - GameConstants.PARTICLE_BURST_MIN_SPEED_FACTOR)
-        ParticleSeed(angleOffsetDegrees, speedFactor)
-    }
-}
-
 /** A directional debris spray kicked off the side of the character facing the incoming shot —
  * on top of the existing symmetric [drawExplosion] rings — so a hit reads as knocking something
  * loose from that side specifically, not just flashing everywhere at once. [seeds]' angle offsets
@@ -1103,30 +1048,6 @@ private fun DrawScope.drawHitParticles(
         val position = impactPoint + offsetFromCenter(angle, travelled)
         drawCircle(
             color = DuelIncomingDanger.copy(alpha = alpha),
-            radius = particleRadiusPx * (1f - progress * GameConstants.PARTICLE_SHRINK_FACTOR),
-            center = position,
-        )
-    }
-}
-
-/** An all-directions debris burst — used for the crate explosion, which (unlike a hit landing on
- * one side of the character) has no "incoming direction" to bias toward. [seeds] must have been
- * generated with `spreadDegrees = 180f` (a full circle) so each `angleOffsetDegrees` can be used
- * directly as an absolute angle, not a narrow offset (contrast with [drawHitParticles]). */
-private fun DrawScope.drawOmnidirectionalParticles(
-    center: Offset,
-    progress: Float,
-    maxDistancePx: Float,
-    particleRadiusPx: Float,
-    color: Color,
-    seeds: List<ParticleSeed>,
-) {
-    val alpha = (1f - progress).coerceIn(0f, 1f)
-    seeds.forEach { seed ->
-        val travelled = maxDistancePx * seed.speedFactor * progress
-        val position = center + offsetFromCenter(seed.angleOffsetDegrees, travelled)
-        drawCircle(
-            color = color.copy(alpha = alpha),
             radius = particleRadiusPx * (1f - progress * GameConstants.PARTICLE_SHRINK_FACTOR),
             center = position,
         )
