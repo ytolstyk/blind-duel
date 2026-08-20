@@ -35,6 +35,7 @@
 - Moved the match-length picker and the debug-only Solo Test entry point (starting weapon, crate toggle) off the main menu and onto the Create screen, so the main menu stays to just name entry and Create/Join.
 
 ### Fixed
+- A popped victory balloon's particle burst was centered and sized off the balloon's full square width, but the balloon body itself is drawn shorter (an oval at 92% of that height) — the burst now centers on the actual balloon body and uses named `GameConstants` tunables instead of inline magic numbers.
 - Solo Test Mode (practice) never tracked the practice dummy's health, so landing hits never ended the duel or showed the win screen. `LoopbackGameConnection` now applies damage to a simulated opponent and echoes back `HealthUpdate`s, so 3 hits now resolves a win exactly like a real duel.
 - Top-anchored UI (settings icon, headers, health dots, hint chips, etc.) across every screen no longer sits underneath the system status bar; each screen now insets its content with `statusBarsPadding()` while backgrounds stay edge-to-edge.
 - Tapping "Rematch" after a Solo Test Mode duel hung on "Waiting for opponent…" forever, since rematch re-enters Calibration without re-hosting and `LoopbackGameConnection` only auto-sent the opponent's `ReadyForDuel` on the very first connect. It now echoes `ReadyForDuel` back like it already does for `RematchRequest`, so a rematch starts a new practice duel correctly.
