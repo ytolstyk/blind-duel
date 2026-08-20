@@ -192,11 +192,13 @@ private fun Balloon(
             },
     ) {
         if (popped) {
+            // The balloon body oval is drawn at heightPx * 0.92f tall (see drawBalloon below),
+            // not a square widthPx x widthPx, so the burst center must match that, not widthPx.
             drawOmnidirectionalParticles(
-                center = Offset(metrics.widthPx / 2f, metrics.widthPx / 2f),
+                center = Offset(metrics.widthPx / 2f, metrics.heightPx * 0.92f / 2f),
                 progress = popProgress.value,
-                maxDistancePx = metrics.widthPx * 1.1f,
-                particleRadiusPx = metrics.widthPx * 0.12f,
+                maxDistancePx = metrics.widthPx * GameConstants.RESULT_BALLOON_POP_MAX_DISTANCE_FACTOR,
+                particleRadiusPx = metrics.widthPx * GameConstants.RESULT_BALLOON_POP_PARTICLE_SIZE_FACTOR,
                 color = cycle.color,
                 seeds = popSeeds,
             )

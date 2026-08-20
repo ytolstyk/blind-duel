@@ -420,6 +420,12 @@ object GameConstants {
     // RESULT_BALLOON_COUNT balloons don't launch in visible lockstep.
     const val RESULT_BALLOON_INITIAL_JITTER_MS = 500L
     const val RESULT_BALLOON_POP_PARTICLE_COUNT = 8
+    // Pop-burst sizing, as a fraction of the balloon's own width — mirrors
+    // RESULT_EXPLOSION_MAX_DISTANCE_DP/RESULT_EXPLOSION_SHARD_SIZE_DP above, scaled per-balloon
+    // instead of as an absolute dp since balloon size itself is fixed but the constant should
+    // still live alongside its sibling tunables rather than inline at the call site.
+    const val RESULT_BALLOON_POP_MAX_DISTANCE_FACTOR = 1.1f
+    const val RESULT_BALLOON_POP_PARTICLE_SIZE_FACTOR = 0.12f
     // Horizontal spawn lane margin, as a fraction of screen width kept clear on each edge, so a
     // balloon's wobble never carries it fully off-screen.
     const val RESULT_BALLOON_SPAWN_MARGIN_FRACTION = 0.1f
