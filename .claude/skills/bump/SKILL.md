@@ -1,13 +1,13 @@
 ---
 name: bump
-description: Bump the app version (versionName + versionCode in app/build.gradle.kts) and roll the CHANGELOG.md [Unreleased] section into a dated release entry. Use when the user types /bump, optionally with major, minor, patch, or an explicit version like 1.3.
+description: Bump the app version (versionName + versionCode in app/build.gradle.kts), roll the CHANGELOG.md [Unreleased] section into a dated release entry, and commit both with the version in the message. Use when the user types /bump, optionally with major, minor, patch, or an explicit version like 1.3.
 disable-model-invocation: true
 argument-hint: "[major|minor|patch|<x.y[.z]>]"
 ---
 
 # /bump
 
-Bump BlindDuel's version and cut a changelog entry. Argument: `$ARGUMENTS`.
+Bump BlindDuel's version, cut a changelog entry, and commit. Argument: `$ARGUMENTS`.
 
 ## 1. Read current state
 
@@ -44,6 +44,16 @@ If `[Unreleased]` has no bullet entries under it, stop and tell the user there's
 
    Use today's date (ISO format). Don't rewrite, reorder, or reword the entries being moved. If the file already has earlier dated release sections, leave them untouched.
 
-## 4. Report
+## 4. Commit
 
-Show the old → new `versionName` / `versionCode` and the changelog heading added. Do **not** commit, tag, or build — mention that `scripts/release.sh` packages the release and offer to commit (the repo's convention is a single small "bumping version" commit touching just those two files) if the user wants it.
+Stage only `app/build.gradle.kts` and `CHANGELOG.md` (by explicit path — never `git add -A`, and leave any other uncommitted changes alone) and commit with the message:
+
+```
+Bump version to <versionName> (versionCode <versionCode>)
+```
+
+followed by the attribution line from the session's system-reminder, if one is present. Do not push, tag, or build.
+
+## 5. Report
+
+Show the old → new `versionName` / `versionCode`, the changelog heading added, and the commit hash. Mention that `scripts/release.sh` packages the release.
