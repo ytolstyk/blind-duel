@@ -1,0 +1,34 @@
+Two phones. Two players. And a screen that never shows you where your rival is.
+
+BlindDuel is a face-to-face duel game for two people standing in the same room. Your phone never draws your opponent. Instead, you read the real world: where are they standing? Which way did they just step? Drag to aim, release to fire, and hope your instincts (and your phone's wonderfully imperfect compass) are good enough.
+
+HOW IT WORKS
+• Pair in seconds: one player creates a duel and shows a QR code, the other scans it. The phones connect directly to each other. No server in the middle, no account, no sign-up.
+• Calibrate: stand facing each other for a quick 3-2-1 so both phones agree on a starting direction.
+• Duel: each phone tracks its own compass heading and your footsteps to estimate where your rival is. Move around and that estimate drifts. The jankiness is part of the fun.
+
+FEATURES
+• Aim blind: no radar, no minimap, no opponent on screen. Just you, your sense of direction and a little bluff.
+• Five weapons: Pistol, Shotgun (wide spread, slow, loud), Hunting Bow (hold to draw, silent), Sniper Rifle (narrow and fast, but your aim can be seen), and Laser (a one-second sweeping beam, silent).
+• Falling weapon crates: shoot them out of the sky to grab a new weapon, and keep an eye on your ammo.
+• Reload timing: tap the reload ring in the golden zone for a clean reload. Mistime it and you pay for it.
+• Dodge: juke at the right moment to make yourself harder to hit.
+• Loud vs. silent: loud weapons warn your rival that a shot is coming, silent ones give no warning until they land.
+• Three match lengths: Quick Duel (first to 2 hits), Standard (3) and Marathon (5).
+• Feel it: haptic feedback on fire and hit, plus a pulse when your rival gets close. Sound, haptics and screen shake are all adjustable.
+• Replay: watch a top-down replay of the duel you just played.
+• Forgiving connection: a brief drop doesn't end the match, the game waits while the phones reconnect.
+• Make it yours: pick your trail colour and the look of the particle backdrop. Dark mode by default.
+• No ads. No account.
+
+WHAT YOU NEED
+• Two Android phones (Android 8.0 or newer) with a compass sensor, in the same room, with Bluetooth and Wi-Fi turned on.
+• A bit of space to move around. A step sensor makes tracking better but is optional.
+
+PERMISSIONS, AND WHY
+• Camera: scan the pairing QR code.
+• Nearby devices / Bluetooth (and Location on older Android versions): find and connect to your rival's phone.
+• Physical activity: count your steps to estimate movement. Optional: the game still works without it.
+• Vibration: haptic feedback.
+
+Grab a friend, stand a few steps apart, and settle it.

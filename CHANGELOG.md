@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- Play Store listing assets under `store/`: 512px icon, 1024x500 feature graphic, 8 captioned screenshots each for phone / 7" tablet / 10" tablet, and the en-US title + short/full description. Includes the scripts to regenerate them (`store/tools/`: emulator capture, composer, icon/feature generator, and a validator that checks Play's size/format/length rules).
 - Match length: a new host-only "Match length" picker on the Create screen (Quick Duel / Standard / Marathon, 2/3/5 hits to win) applied when creating a duel. The joiner automatically adopts the host's choice — there is no separate joiner-side picker, and Solo Test Mode always plays at the standard 3 hits regardless of the picker's current selection.
 - Dodge: a new HUD button (bottom-left of the Duel screen) that briefly narrows the opponent's effective hit tolerance against you when tapped, on a cooldown. Rewards ducking/juking out of the way of an incoming shot rather than standing still.
 - Fog-of-war confidence decay: the longer you go without taking a physical step, the more forgiving your own aim's hit tolerance becomes — an intentional mechanic formalizing the existing "your sensor estimate gets worse over time" jankiness. Not shown in the UI.
