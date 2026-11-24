@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.2] - 2026-11-24
 ### Added
 - `scripts/release.sh`: one-command release packaging (runs tests, builds AAB + APK, copies them with R8 `mapping.txt`, checksums and release notes into `releases/v<version>/`, prints a link). `app/build.gradle.kts` now signs release builds when a gitignored `keystore.properties` is present.
 - Play Store listing assets under `store/`: 512px icon, 1024x500 feature graphic, 8 captioned screenshots each for phone / 7" tablet / 10" tablet, and the en-US title + short/full description. Includes the scripts to regenerate them (`store/tools/`: emulator capture, composer, icon/feature generator, and a validator that checks Play's size/format/length rules).
