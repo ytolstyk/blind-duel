@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,6 +8,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt.gradle)
     alias(libs.plugins.ksp)
+}
+
+// Optional release signing: create keystore.properties at the project root (gitignored) with
+// storeFile and keyAlias, plus storePassword/keyPassword — or omit the passwords and supply them via
+// the BLINDDUEL_STORE_PASSWORD / BLINDDUEL_KEY_PASSWORD env vars (scripts/release.sh prompts for them).
+// Without keystore.properties, release artifacts are unsigned.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -25,8 +35,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystoreProps.containsKey("storeFile")) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                    ?: System.getenv("BLINDDUEL_STORE_PASSWORD")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                    ?: System.getenv("BLINDDUEL_KEY_PASSWORD")
+                    ?: storePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false

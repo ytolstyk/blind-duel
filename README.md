@@ -27,6 +27,7 @@ A Settings screen (sound, haptics, screen-shake intensity, and cosmetic trail/pa
 ```bash
 ./gradlew assembleDebug          # Build debug APK
 ./gradlew assembleRelease        # Build release APK (minified + resource shrinking, R8)
+scripts/release.sh               # Full release package (AAB+APK+mapping) in releases/v<version>/
 ./gradlew installDebug           # Build and install on connected device/emulator
 ./gradlew test                   # Run all unit tests
 ./gradlew lint                   # Run static code analysis
